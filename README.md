@@ -9,13 +9,16 @@ dashboard Streamlit.
 ```
 .
 ├── dashboard/
-│   ├── Home.py            # Home: ricerca + slider film/serie + scheda dettagli
+│   ├── Home.py            # Home: ricerca + slider film/serie/anime + scheda dettagli
 │   └── pages/
 │       ├── Film.py        # Catalogo film con filtri
-│       └── Serie TV.py    # Catalogo serie TV con filtri
+│       ├── Serie TV.py    # Catalogo serie TV con filtri
+│       ├── Anime.py       # Catalogo anime (AniList + AnimeWorld)
+│       └── Manutenzione.py # Controllo e rigenerazione dei link scaduti
 ├── config.py              # Carica i segreti dal file .env
 ├── estrattore.py          # Estrazione dei flussi video/audio (Playwright)
 ├── file_manager.py        # Creazione/rimozione file .m3u8/.strm e refresh Jellyfin
+├── manutenzione.py        # Scansione, verifica e rigenerazione dei link del catalogo
 ├── paths.py               # Percorsi di libreria e configurazione Jellyfin
 ├── tmdb.py                # Client TMDB (ricerca, popolari, discover, dettagli)
 ├── ui_components.py       # Componenti UI condivisi (griglia + scheda dettagli)
@@ -78,3 +81,10 @@ dashboard Streamlit.
 - La gestione Jellyfin è per contenuto: un film è un singolo file, mentre per le
   serie si aggiungono/rimuovono **intere stagioni** (`Stagione N`), con i singoli
   episodi (`S01E01`) disponibili come opzione.
+- La pagina **Manutenzione** (`dashboard/pages/Manutenzione.py`) aiuta a tenere in
+  ordine la libreria: i link di film e serie sono URL **firmati vixsrc** che
+  scadono col tempo, quindi il video smette di partire anche se il file c'è.
+  La pagina scansiona le tre librerie, **verifica** quali link rispondono ancora
+  e permette di **rigenerare** i file rotti (ri-estraendo da vixsrc, o
+  re-risolvendo l'episodio anime da AnimeWorld) oppure di rimuoverli.
+  Rigenerare una serie richiede Playwright installato, come per l'aggiunta.
