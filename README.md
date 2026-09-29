@@ -63,6 +63,9 @@ dashboard Streamlit.
   `FILMS_PATH` e `ANIME_PATH` nel `.env` (in `paths.py` ci sono solo i default).
 - Le pagine **Film** e **Serie TV** usano l'endpoint `/discover` di TMDB con
   filtri per genere, anno, voto e ordinamento.
+- La **Home** mostra tre slider orizzontali (Film, Serie TV e Anime Popolari).
+  Lo slider anime usa AniList come le altre sezioni anime; cliccando una card
+  si apre la ricerca corrispondente su AnimeWorld.
 - La pagina **Anime** ha due modalità: ricerca per titolo direttamente su AnimeWorld,
   oppure esplorazione con **filtri** (genere, anno, voto, ordinamento) e sezione
   **popolari**. Questi ultimi dati vengono da **AniList** (GraphQL, nessuna chiave
