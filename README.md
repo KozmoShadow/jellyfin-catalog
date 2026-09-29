@@ -11,7 +11,8 @@ dashboard Streamlit.
 ├── dashboard/
 │   ├── Home.py            # Home: ricerca + slider film/serie + scheda dettagli
 │   └── pages/
-│       └── Film.py        # Catalogo film con filtri
+│       ├── Film.py        # Catalogo film con filtri
+│       └── Serie TV.py    # Catalogo serie TV con filtri
 ├── config.py              # Carica i segreti dal file .env
 ├── estrattore.py          # Estrazione dei flussi video/audio (Playwright)
 ├── file_manager.py        # Creazione/rimozione file .m3u8/.strm e refresh Jellyfin
@@ -52,5 +53,8 @@ dashboard Streamlit.
 
 - Il file `.env` non è versionato: non committare mai le chiavi API.
 - I file `.m3u8` / `.strm` vengono scritti nelle cartelle definite in `paths.py`.
-- La pagina **Film** (`pages/Film.py`) usa l'endpoint `/discover/movie` di TMDB
-  con filtri per genere, anno, voto e ordinamento.
+- Le pagine **Film** e **Serie TV** usano l'endpoint `/discover` di TMDB con
+  filtri per genere, anno, voto e ordinamento.
+- La gestione Jellyfin è per contenuto: un film è un singolo file, mentre per le
+  serie si aggiungono/rimuovono i **singoli episodi** (`S01E01`) nella cartella
+  `Stagione N`.

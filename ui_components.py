@@ -7,16 +7,21 @@ import tmdb
 from file_manager import (
     verifica_presenza_jellyfin,
     crea_cartella_film,
+    crea_file_serie,
     rimuovi_cartella_film,
+    rimuovi_cartella_serie,
+    verifica_presenza_episodio,
+    rimuovi_episodio,
     rinfresca_libreria_jellyfin,
 )
 from estrattore import estrai_flussi
 
 
-def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"):
+def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details", key=None):
     """Renderizza una griglia di card cliccabili (poster + titolo + anno + tipo).
 
     link_path è la rotta a cui puntano le card (es. "/Film" per la pagina film).
+    key è una chiave univoca del componente HTML (evita collisioni tra griglie).
     """
     st.subheader(titolo_sezione)
 
@@ -122,11 +127,15 @@ def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"
     </div>
     """
 
-    components.html(html_code, height=altezza_box, scrolling=True)
+    components.html(html_code, height=altezza_box, scrolling=True, key=key)
 
 
 def render_scheda_dettagli(content_type, content_id):
-    """Renderizza la scheda di dettaglio (poster, badge, trailer, cast) e la gestione Jellyfin."""
+    """Renderizza la scheda di dettaglio (poster, badge, trailer, cast) e la gestione Jellyfin.
+
+    Per le serie TV mostra il selettore stagione/episodio e la gestione Jellyfin
+    avviene per singolo episodio (come da logica di crea_file_serie).
+    """
     dettagli = tmdb.get_tmdb_details(content_type, content_id)
 
     if not dettagli:
@@ -140,7 +149,7 @@ def render_scheda_dettagli(content_type, content_id):
 
     titolo = dettagli.get("title") or dettagli.get("name") or "Senza titolo"
     anno = (dettagli.get("release_date") or dettagli.get("first_air_date") or "")[:4]
-    overview = dettagli.get("overview", "Nessuna descrizione disponibile.")
+    overview = dettagli.get("overview") or "Nessuna descrizione disponibile."
     poster_path = dettagli.get("poster_path")
     vote_average = dettagli.get("vote_average", 0)
     genres = ", ".join([g["name"] for g in dettagli.get("genres", [])])
@@ -160,7 +169,6 @@ def render_scheda_dettagli(content_type, content_id):
     credits = tmdb.get_tmdb_credits(content_type, content_id)
     if credits and "cast" in credits:
         cast_list = [actor["name"] for actor in credits["cast"][:5]]
-    cast_str = ", ".join(cast_list) if cast_list else ""
 
     col_poster, col_info = st.columns([1, 2.5], gap="large")
 
@@ -171,7 +179,7 @@ def render_scheda_dettagli(content_type, content_id):
             st.image("https://via.placeholder.com/300x450?text=No+Image", use_container_width=True)
 
     with col_info:
-        st.title(f"{titolo} ({anno})")
+        st.title(f"{titolo} ({anno})" if anno else titolo)
 
         info_badges = []
         if vote_average > 0:
@@ -200,13 +208,21 @@ def render_scheda_dettagli(content_type, content_id):
 
         if cast_list:
             st.markdown("### Cast Principale")
-            st.write(cast_str)
+            st.write(", ".join(cast_list))
 
     st.markdown("---")
 
+    if content_type == "movie":
+        _gestione_film(content_id, titolo, anno)
+    else:
+        _gestione_serie(content_id, titolo)
+
+
+def _gestione_film(content_id, titolo, anno):
+    """Gestione Jellyfin per un film: aggiunge/rimuove l'intera cartella."""
     st.subheader("⚙️ Gestione File Jellyfin")
 
-    gia_in_libreria = verifica_presenza_jellyfin(content_type, content_id, titolo, anno)
+    gia_in_libreria = verifica_presenza_jellyfin("movie", content_id, titolo, anno)
 
     col_j1, col_j2 = st.columns(2)
 
@@ -217,17 +233,12 @@ def render_scheda_dettagli(content_type, content_id):
             if st.button("➕ Aggiungi a Jellyfin", use_container_width=True):
                 with st.spinner("Estrazione flussi e creazione in corso..."):
                     try:
-                        if content_type == "movie":
-                            url_pagina = f"https://vixsrc.to/movie/{content_id}?lang=it"
-                        else:
-                            url_pagina = f"https://vixsrc.to/tv/{content_id}?lang=it"
-
+                        url_pagina = f"https://vixsrc.to/movie/{content_id}?lang=it"
                         video_link, audio_link = estrai_flussi(url_pagina)
 
                         if video_link:
                             crea_cartella_film(content_id, titolo, anno, video_link, audio_link)
                             rinfresca_libreria_jellyfin()
-
                             st.success(f"'{titolo}' aggiunto e libreria Jellyfin aggiornata!")
                             st.rerun()
                         else:
@@ -240,8 +251,86 @@ def render_scheda_dettagli(content_type, content_id):
             try:
                 rimuovi_cartella_film(content_id, titolo, anno)
                 rinfresca_libreria_jellyfin()
-
                 st.warning(f"File rimosso per '{titolo}'.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Errore durante la rimozione: {e}")
+
+
+def _gestione_serie(content_id, titolo):
+    """Gestione Jellyfin per una serie: seleziona stagione/episodio e agisce sull'episodio."""
+    st.subheader("⚙️ Gestione File Jellyfin")
+
+    stagioni = tmdb.get_stagioni(content_id)
+    if not stagioni:
+        st.info("Nessuna stagione disponibile per questa serie.")
+        return
+
+    opzioni_stagioni = {s.get("name") or f"Stagione {s['season_number']}": s["season_number"] for s in stagioni}
+    nome_stagione = st.selectbox("Stagione", list(opzioni_stagioni.keys()))
+    stagione_num = opzioni_stagioni[nome_stagione]
+
+    episodi = tmdb.get_dettagli_stagione(content_id, stagione_num) or []
+    if not episodi:
+        st.info("Nessun episodio disponibile per questa stagione.")
+        return
+
+    opzioni_episodi = {
+        f"{int(e.get('episode_number', 0)):02d} - {e.get('name') or 'Senza titolo'}": e.get("episode_number")
+        for e in episodi
+    }
+    etichette = list(opzioni_episodi.keys())
+
+    # Pre-selezione: primo episodio non ancora in libreria
+    indice_default = 0
+    for i, etichetta in enumerate(etichette):
+        if not verifica_presenza_episodio(content_id, titolo, stagione_num, opzioni_episodi[etichetta]):
+            indice_default = i
+            break
+
+    etichetta_scelta = st.selectbox("Episodio", etichette, index=indice_default)
+    episodio_num = opzioni_episodi[etichetta_scelta]
+
+    gia_presente = verifica_presenza_episodio(content_id, titolo, stagione_num, episodio_num)
+
+    col_j1, col_j2 = st.columns(2)
+
+    with col_j1:
+        if st.button("➕ Aggiungi episodio a Jellyfin", use_container_width=True):
+            with st.spinner("Estrazione flussi e creazione in corso..."):
+                try:
+                    url_pagina = f"https://vixsrc.to/tv/{content_id}/{stagione_num}/{episodio_num}?lang=it"
+                    video_link, audio_link = estrai_flussi(url_pagina)
+
+                    if video_link:
+                        crea_file_serie(content_id, titolo, stagione_num, episodio_num, video_link, audio_link)
+                        rinfresca_libreria_jellyfin()
+                        st.success(f"S{stagione_num:02d}E{episodio_num:02d} aggiunto e libreria aggiornata!")
+                        st.rerun()
+                    else:
+                        st.error("Impossibile estrarre i flussi video dal link sorgente.")
+                except Exception as e:
+                    st.error(f"Errore durante l'aggiunta: {e}")
+
+    with col_j2:
+        if st.button("🗑️ Rimuovi episodio", use_container_width=True, disabled=not gia_presente):
+            try:
+                rimuovi_episodio(content_id, titolo, stagione_num, episodio_num)
+                rinfresca_libreria_jellyfin()
+                st.warning(f"S{stagione_num:02d}E{episodio_num:02d} rimosso.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Errore durante la rimozione: {e}")
+
+    if gia_presente:
+        st.caption(f"✅ S{stagione_num:02d}E{episodio_num:02d} è già presente in libreria.")
+
+    st.markdown("---")
+    if st.button("🗑️ Rimuovi l'intera serie da Jellyfin", use_container_width=True):
+        try:
+            rimuovi_cartella_serie(content_id, titolo)
+            rinfresca_libreria_jellyfin()
+            st.warning(f"Serie '{titolo}' rimossa.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Errore durante la rimozione della serie: {e}")
