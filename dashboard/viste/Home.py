@@ -111,7 +111,7 @@ if not query_ricerca:
 
     st.divider()
 
-    popolari_anime, _ = anilist.discover(page=1, per_page=30)
+    popolari_anime, _ = anilist.discover(sort_by="POPULARITY_DESC", page=1, per_page=30)
     mostra_slider_orizzontale(
         "⛩️ Anime Popolari", [card_da_anilist(i) for i in popolari_anime]
     )
