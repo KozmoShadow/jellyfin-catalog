@@ -237,30 +237,60 @@ def rigenera_episodio_serie(voce):
         return False, str(e)
 
 
-def rigenera_episodi_anime(titolo, voci):
+def _origine_per_voci(voci):
+    """Ricava la pagina AnimeWorld della stagione dal file `.animeworld` accanto ai file.
+
+    Tutte le voci del gruppo stanno nella stessa cartella di stagione, quindi basta
+    la prima. Ritorna None se non c'è (stagioni create prima di questa funzione).
+    """
+    from file_manager import NOME_FILE_ORIGINE
+    for voce in voci:
+        riferimento = voce.get("file_media") or voce.get("file_strm")
+        if not riferimento:
+            continue
+        percorso = Path(riferimento).parent / NOME_FILE_ORIGINE
+        if percorso.exists():
+            contenuto = percorso.read_text(encoding="utf-8").strip()
+            if contenuto:
+                # Normalizza a pagina anime: file scritti a mano possono contenere
+                # anche la parte con l'id dell'episodio.
+                return anime_api.link_pagina_anime(contenuto)
+    return None
+
+
+def rigenera_episodi_anime(titolo, voci, link_anime=None):
     """Re-risolve da AnimeWorld gli episodi rotti di un anime.
 
-    Cerca l'anime per titolo, risolve la lista episodi una sola volta e riscrive
-    i `.strm` dei soli episodi passati. Ritorna (ok, falliti, messaggio).
+    Usa la pagina AnimeWorld salvata per la stagione (`.animeworld`), così con più
+    stagioni si ricaricano gli episodi giusti; se manca, ripiega sulla ricerca per
+    titolo. Riscrive i `.strm` dei soli episodi passati. Ritorna (ok, falliti, messaggio).
     """
-    try:
-        risultati = anime_api.cerca_anime(titolo)
-    except Exception as e:
-        return 0, len(voci), f"ricerca AnimeWorld fallita: {e}"
+    link_anime = link_anime or _origine_per_voci(voci)
 
-    if not risultati:
-        return 0, len(voci), "anime non trovato su AnimeWorld"
+    if link_anime:
+        try:
+            episodi = anime_api.episodi(link_anime)
+        except Exception as e:
+            return 0, len(voci), f"lettura episodi fallita: {e}"
+    else:
+        # Fallback: nessun file di origine, si cerca per titolo (ambiguo con più stagioni)
+        try:
+            risultati = anime_api.cerca_anime(titolo)
+        except Exception as e:
+            return 0, len(voci), f"ricerca AnimeWorld fallita: {e}"
 
-    # Preferisce una corrispondenza esatta del titolo, altrimenti il primo risultato
-    migliore = next(
-        (r for r in risultati if (r.get("name") or "").strip().lower() == titolo.strip().lower()),
-        risultati[0],
-    )
+        if not risultati:
+            return 0, len(voci), "anime non trovato su AnimeWorld"
 
-    try:
-        episodi = anime_api.episodi(migliore["link"])
-    except Exception as e:
-        return 0, len(voci), f"lettura episodi fallita: {e}"
+        migliore = next(
+            (r for r in risultati if (r.get("name") or "").strip().lower() == titolo.strip().lower()),
+            risultati[0],
+        )
+
+        try:
+            episodi = anime_api.episodi(migliore["link"])
+        except Exception as e:
+            return 0, len(voci), f"lettura episodi fallita: {e}"
 
     mappa = {str(ep.number): ep for ep in episodi}
     ok = falliti = 0

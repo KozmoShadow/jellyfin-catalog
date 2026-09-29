@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 # Aggiunge la radice del progetto al path per importare i moduli di backend
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 import streamlit as st
 
