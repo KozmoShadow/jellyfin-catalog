@@ -107,7 +107,8 @@ suffisso = f" — {', '.join(etichetta_filtri)}" if etichetta_filtri else ""
 mostra_griglia(
     f"Risultati{suffisso} (Pagina {st.session_state.serie_page} di {total_pages})",
     risultati,
-    link_path="/Serie TV",
+    # Streamlit converte gli spazi del nome file in underscore: la rotta è /Serie_TV
+    link_path="/Serie_TV",
 )
 
 if total_pages > 1:
