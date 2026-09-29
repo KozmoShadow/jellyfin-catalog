@@ -14,7 +14,7 @@ import requests
 
 import anime_api
 import paths
-from estrattore import estrai_flussi
+from estrattore import estrai_flussi, _chiudi_risorse
 from file_manager import (
     _titolo_pulito,
     crea_cartella_film,
@@ -221,6 +221,8 @@ def rigenera_film(voce):
         return True, "rigenerato"
     except Exception as e:
         return False, str(e)
+    finally:
+        _chiudi_risorse()
 
 
 def rigenera_episodio_serie(voce):
@@ -236,6 +238,8 @@ def rigenera_episodio_serie(voce):
         return True, "rigenerato"
     except Exception as e:
         return False, str(e)
+    finally:
+        _chiudi_risorse()
 
 
 def _origine_per_voci(voci):
@@ -296,19 +300,24 @@ def rigenera_episodi_anime(titolo, voci, link_anime=None):
 
     mappa = {str(ep.number): ep for ep in episodi}
     ok = falliti = 0
-    for voce in voci:
-        episodio = mappa.get(str(voce["episodio"]))
-        try:
-            link = anime_api.link_mp4(episodio) if episodio else None
-        except Exception:
-            # Un server può sollevare durante `episodio.links`: conta come fallito
-            # invece di far esplodere l'intera rigenerazione.
-            link = None
-        if link:
-            crea_file_anime(titolo, voce["stagione"], voce["episodio"], link)
-            ok += 1
-        else:
-            falliti += 1
+    try:
+        for voce in voci:
+            episodio = mappa.get(str(voce["episodio"]))
+            try:
+                link = anime_api.link_mp4(episodio) if episodio else None
+            except Exception:
+                # Un server può sollevare durante `episodio.links`: conta come fallito
+                # invece di far esplodere l'intera rigenerazione.
+                link = None
+            if link:
+                crea_file_anime(titolo, voce["stagione"], voce["episodio"], link)
+                ok += 1
+            else:
+                falliti += 1
+    finally:
+        # Le librerie anime possono usare Playwright per i mirror: si chiude il
+        # browser del thread anche in caso di errore.
+        _chiudi_risorse()
 
     # Salva l'origine ritrovata (se mancava) perché le prossime rigenerazioni
     # non dipendano più dalla ricerca per titolo.

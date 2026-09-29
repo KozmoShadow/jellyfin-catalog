@@ -28,7 +28,7 @@ from file_manager import (
     rimuovi_stagione_anime,
     rinfresca_libreria_jellyfin,
 )
-from estrattore import estrai_flussi
+from estrattore import estrai_flussi, _chiudi_risorse
 
 
 _GRID_STYLE = """
@@ -638,6 +638,7 @@ def _aggiungi_intera_serie(content_id, titolo, stagioni):
             falliti += 1
 
     barra.empty()
+    _chiudi_risorse()
 
     if aggiunti:
         rinfresca_libreria_jellyfin()
@@ -672,6 +673,7 @@ def _aggiungi_stagione(content_id, titolo, stagione_num, numeri_episodi):
             falliti += 1
 
     barra.empty()
+    _chiudi_risorse()
 
     if aggiunti:
         rinfresca_libreria_jellyfin()
@@ -869,6 +871,7 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
             falliti += 1
 
     barra.empty()
+    _chiudi_risorse()
 
     # Ricorda la pagina AnimeWorld della stagione: la manutenzione la userà per
     # rigenerare gli episodi senza ambiguità tra più stagioni.
