@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Aggiunge la radice del progetto al path per importare i moduli di backend
@@ -10,17 +11,17 @@ import tmdb
 from ui_components import mostra_griglia, render_scheda_dettagli
 
 st.set_page_config(
-    page_title="Catalogo Film",
-    page_icon="🎞️",
+    page_title="Catalogo Serie TV",
+    page_icon="📺",
     layout="wide",
 )
 
 # ==========================================
-# 📄 SCHEDA DETTAGLI (SE UN FILM È STATO CLICCATO)
+# 📄 SCHEDA DETTAGLI (SE UNA SERIE È STATA CLICCATTA)
 # ==========================================
 content_id = st.query_params.get("id")
 if content_id:
-    content_type = st.query_params.get("type", "movie")
+    content_type = st.query_params.get("type", "tv")
 
     if st.button("⬅️ Torna al catalogo"):
         st.query_params.clear()
@@ -30,24 +31,23 @@ if content_id:
     st.stop()
 
 # ==========================================
-# 🎞️ CATALOGO FILM (FILTRI + GRIGLIA)
+# 📺 CATALOGO SERIE TV (FILTRI + GRIGLIA)
 # ==========================================
-st.title("🎞️ Catalogo Film")
+st.title("📺 Catalogo Serie TV")
 
-# --- Opzioni di ordinamento (etichetta -> parametro TMDB) ---
+# --- Opzioni di ordinamento (etichetta -> parametro TMDB per le serie) ---
 ORDINAMENTI = {
     "Popolarità": "popularity.desc",
     "Voto medio": "vote_average.desc",
-    "Più recenti": "primary_release_date.desc",
-    "Più vecchi": "primary_release_date.asc",
-    "Incasso": "revenue.desc",
+    "Più recenti": "first_air_date.desc",
+    "Più vecchie": "first_air_date.asc",
 }
 
 # --- Generi TMDB (con cache in sessione per non richiamare l'API a ogni rerun) ---
-if "film_generi" not in st.session_state:
-    generi = tmdb.get_generi("movie")
-    st.session_state.film_generi = {g["name"]: g["id"] for g in generi}
-mappa_generi = st.session_state.film_generi
+if "serie_generi" not in st.session_state:
+    generi = tmdb.get_generi("tv")
+    st.session_state.serie_generi = {g["name"]: g["id"] for g in generi}
+mappa_generi = st.session_state.serie_generi
 
 # --- Filtri nella sidebar ---
 with st.sidebar:
@@ -55,7 +55,7 @@ with st.sidebar:
 
     genere_scelto = st.selectbox("Genere", ["Tutti"] + list(mappa_generi.keys()))
 
-    anno_corrente = 2026
+    anno_corrente = datetime.now().year
     anni = ["Tutti"] + list(range(anno_corrente, 1949, -1))
     anno_scelto = st.selectbox("Anno di uscita", anni)
 
@@ -71,11 +71,11 @@ with st.sidebar:
 
 # --- Paginazione: torna a pagina 1 quando cambiano i filtri ---
 filtri_correnti = (genere_scelto, anno_scelto, voto_min, min_voti, ordinamento_scelto)
-if st.session_state.get("film_filtri") != filtri_correnti:
-    st.session_state.film_filtri = filtri_correnti
-    st.session_state.film_page = 1
-if "film_page" not in st.session_state:
-    st.session_state.film_page = 1
+if st.session_state.get("serie_filtri") != filtri_correnti:
+    st.session_state.serie_filtri = filtri_correnti
+    st.session_state.serie_page = 1
+if "serie_page" not in st.session_state:
+    st.session_state.serie_page = 1
 
 genere_id = mappa_generi.get(genere_scelto) if genere_scelto != "Tutti" else None
 anno = None if anno_scelto == "Tutti" else anno_scelto
@@ -83,13 +83,13 @@ voto = voto_min if voto_min > 0 else None
 voti = min_voti if min_voti > 0 else None
 
 risultati, total_pages = tmdb.discover(
-    media_type="movie",
+    media_type="tv",
     genere_id=genere_id,
     anno=anno,
     voto_min=voto,
     min_voti=voti,
     sort_by=ORDINAMENTI[ordinamento_scelto],
-    page=st.session_state.film_page,
+    page=st.session_state.serie_page,
 )
 
 # TMDB limita la paginazione a 500 pagine
@@ -105,29 +105,29 @@ if voto_min > 0:
 suffisso = f" — {', '.join(etichetta_filtri)}" if etichetta_filtri else ""
 
 mostra_griglia(
-    f"Risultati{suffisso} (Pagina {st.session_state.film_page} di {total_pages})",
+    f"Risultati{suffisso} (Pagina {st.session_state.serie_page} di {total_pages})",
     risultati,
-    link_path="/Film",
+    link_path="/Serie TV",
 )
 
 if total_pages > 1:
     col_prec, col_info, col_succ = st.columns([1, 2, 1])
 
     with col_prec:
-        if st.session_state.film_page > 1:
+        if st.session_state.serie_page > 1:
             if st.button("⬅️ Precedente"):
-                st.session_state.film_page -= 1
+                st.session_state.serie_page -= 1
                 st.rerun()
 
     with col_info:
         st.markdown(
             f"<div style='text-align: center; margin-top: 5px;'>Pagina "
-            f"<b>{st.session_state.film_page}</b> di <b>{total_pages}</b></div>",
+            f"<b>{st.session_state.serie_page}</b> di <b>{total_pages}</b></div>",
             unsafe_allow_html=True,
         )
 
     with col_succ:
-        if st.session_state.film_page < total_pages:
+        if st.session_state.serie_page < total_pages:
             if st.button("Successivo ➡️"):
-                st.session_state.film_page += 1
+                st.session_state.serie_page += 1
                 st.rerun()

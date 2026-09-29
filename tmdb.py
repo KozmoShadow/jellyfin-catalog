@@ -32,6 +32,15 @@ def get_numero_stagioni(tmdb_id):
         return response.json().get("number_of_seasons")
     return None
 
+def get_stagioni(tmdb_id):
+    """Restituisce la lista delle stagioni di una serie, escludendo gli speciali (stagione 0)."""
+    url = f"{BASE_URL}/tv/{tmdb_id}?api_key={API_KEY}&language=it-IT"
+    response = requests.get(url)
+    if response.status_code == 200:
+        stagioni = response.json().get("seasons", [])
+        return [s for s in stagioni if s.get("season_number", 0) > 0]
+    return []
+
 IMG_BASE_URL = "https://image.tmdb.org/t/p/w500"
 
 def cerca_multimediale(query, page=1):
@@ -94,24 +103,25 @@ def get_generi(media_type="movie"):
         return response.json().get("genres", [])
     return []
 
-def discover_movie(genere_id=None, anno=None, voto_min=None, min_voti=None,
-                   sort_by="popularity.desc", page=1):
+def discover(media_type="movie", genere_id=None, anno=None, voto_min=None,
+             min_voti=None, sort_by="popularity.desc", page=1):
     """
-    Cerca film tramite /discover/movie applicando i filtri del catalogo.
+    Cerca film o serie TV tramite /discover applicando i filtri del catalogo.
 
     Parametri:
+        media_type: "movie" oppure "tv"
         genere_id: id del genere TMDB (with_genres)
-        anno: anno di uscita (primary_release_year)
+        anno: anno di uscita (primary_release_year per i film, first_air_date_year per le serie)
         voto_min: voto medio minimo (vote_average.gte)
         min_voti: numero minimo di voti (vote_count.gte), utile per scartare
                   titoli con pochissimi voti che falsano il voto medio
         sort_by: ordinamento TMDB (es. popularity.desc, vote_average.desc,
-                 primary_release_date.desc, revenue.desc)
+                 primary_release_date.desc / first_air_date.desc, revenue.desc)
         page: pagina dei risultati
 
     Restituisce una tupla (risultati, total_pages).
     """
-    url = f"{BASE_URL}/discover/movie"
+    url = f"{BASE_URL}/discover/{media_type}"
     params = {
         "api_key": API_KEY,
         "language": "it-IT",
@@ -122,7 +132,10 @@ def discover_movie(genere_id=None, anno=None, voto_min=None, min_voti=None,
     if genere_id:
         params["with_genres"] = genere_id
     if anno:
-        params["primary_release_year"] = anno
+        if media_type == "movie":
+            params["primary_release_year"] = anno
+        else:
+            params["first_air_date_year"] = anno
     if voto_min:
         params["vote_average.gte"] = voto_min
     if min_voti:
