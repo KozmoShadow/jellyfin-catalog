@@ -1,0 +1,21 @@
+# --- Segreti / configurazione locale ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# --- File generati dal catalogo (se finiscono nel progetto) ---
+*.m3u8
+*.strm
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db
