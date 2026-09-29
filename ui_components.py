@@ -577,14 +577,76 @@ def _gestione_serie(content_id, titolo):
                     st.error(f"Errore durante la rimozione: {e}")
 
     st.markdown("---")
-    if st.button("🗑️ Rimuovi l'intera serie da Jellyfin", use_container_width=True):
+    col_s1, col_s2 = st.columns(2)
+
+    with col_s1:
+        st.caption("Aggiunge tutti gli episodi di tutte le stagioni (può richiedere tempo).")
+        if st.button("➕ Aggiungi l'intera serie", use_container_width=True):
+            _aggiungi_intera_serie(content_id, titolo, stagioni)
+
+    with col_s2:
+        st.caption("Rimuove dal disco tutte le stagioni della serie.")
+        if st.button("🗑️ Rimuovi l'intera serie da Jellyfin", use_container_width=True):
+            try:
+                rimuovi_cartella_serie(content_id, titolo)
+                rinfresca_libreria_jellyfin()
+                st.warning(f"Serie '{titolo}' rimossa.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Errore durante la rimozione della serie: {e}")
+
+
+def _aggiungi_intera_serie(content_id, titolo, stagioni):
+    """Aggiunge a Jellyfin tutti gli episodi di tutte le stagioni, saltando quelli presenti."""
+    piano = []
+    for s in stagioni:
+        stagione_num = s["season_number"]
+        dettagli_stagione = tmdb.get_dettagli_stagione(content_id, stagione_num) or {}
+        for e in dettagli_stagione.get("episodes", []):
+            piano.append((stagione_num, e.get("episode_number") or 0))
+
+    mancanti = [
+        (s, n) for s, n in piano
+        if not verifica_presenza_episodio(content_id, titolo, s, n)
+    ]
+    if not mancanti:
+        st.info("Tutti gli episodi della serie sono già in libreria.")
+        return
+
+    totale = len(mancanti)
+    barra = st.progress(0.0, text=f"Preparazione di {totale} episodi...")
+    aggiunti, falliti = 0, 0
+
+    for i, (stagione_num, episodio_num) in enumerate(mancanti, start=1):
+        barra.progress(
+            i / totale,
+            text=f"S{stagione_num:02d}E{int(episodio_num):02d} ({i}/{totale})...",
+        )
         try:
-            rimuovi_cartella_serie(content_id, titolo)
-            rinfresca_libreria_jellyfin()
-            st.warning(f"Serie '{titolo}' rimossa.")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Errore durante la rimozione della serie: {e}")
+            url_pagina = (
+                f"https://vixsrc.to/tv/{content_id}/{stagione_num}/{episodio_num}?lang=it"
+            )
+            video_link, audio_link = estrai_flussi(url_pagina)
+            if video_link:
+                crea_file_serie(
+                    content_id, titolo, stagione_num, episodio_num, video_link, audio_link
+                )
+                aggiunti += 1
+            else:
+                falliti += 1
+        except Exception:
+            falliti += 1
+
+    barra.empty()
+
+    if aggiunti:
+        rinfresca_libreria_jellyfin()
+
+    if falliti:
+        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.")
+    else:
+        st.success(f"{aggiunti} episodi aggiunti e libreria Jellyfin aggiornata!")
+    st.rerun()
 
 
 def _aggiungi_stagione(content_id, titolo, stagione_num, numeri_episodi):
