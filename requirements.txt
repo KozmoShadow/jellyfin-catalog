@@ -2,3 +2,5 @@ streamlit
 requests
 python-dotenv
 playwright
+animeworld
+beautifulsoup4

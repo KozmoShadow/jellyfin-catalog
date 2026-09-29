@@ -163,6 +163,65 @@ def rimuovi_stagione(tmdb_id, nome_serie, stagione_num):
         print(f"Rimosso con successo dal disco: '{nome_serie}' (nessuna stagione rimasta)")
 
 
+def _percorso_episodio_anime(titolo, stagione_num, episodio_num):
+    nome_pulito = _titolo_pulito(titolo)
+    ep_str = f"S{int(stagione_num):02d}E{int(episodio_num):02d}"
+    cartella_stagione = (
+        Path(paths.anime_path) / nome_pulito / f"Season {int(stagione_num):02d}"
+    )
+    return cartella_stagione / f"{nome_pulito} - {ep_str}"
+
+
+def crea_file_anime(titolo, stagione_num, episodio_num, link_stream):
+    """Crea il file .strm di un episodio anime puntando all'URL mp4 diretto."""
+    nome_pulito = _titolo_pulito(titolo)
+    base = _percorso_episodio_anime(titolo, stagione_num, episodio_num)
+    base.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(base.with_suffix(".strm"), "w", encoding="utf-8") as f:
+        f.write(link_stream + "\n")
+
+    print(f"Generato con successo: {base.name}.strm per l'anime '{titolo}'")
+
+
+def verifica_presenza_episodio_anime(titolo, stagione_num, episodio_num):
+    """Verifica se il singolo episodio anime è già presente in libreria."""
+    return _percorso_episodio_anime(titolo, stagione_num, episodio_num).with_suffix(".strm").exists()
+
+
+def verifica_presenza_stagione_anime(titolo, stagione_num, episodi):
+    """Restituisce i numeri di episodio già presenti per una stagione anime."""
+    return [
+        n for n in episodi
+        if verifica_presenza_episodio_anime(titolo, stagione_num, n)
+    ]
+
+
+def rimuovi_episodio_anime(titolo, stagione_num, episodio_num):
+    """Rimuove il file .strm del singolo episodio anime."""
+    percorso = _percorso_episodio_anime(titolo, stagione_num, episodio_num).with_suffix(".strm")
+    if percorso.exists():
+        percorso.unlink()
+        print(f"Rimosso: {percorso.name}")
+
+
+def rimuovi_stagione_anime(titolo, stagione_num):
+    """Rimuove l'intera cartella di una stagione anime.
+
+    Se non restano altre stagioni, elimina anche la cartella della serie.
+    """
+    nome_pulito = _titolo_pulito(titolo)
+    cartella_stagione = Path(paths.anime_path) / nome_pulito / f"Season {int(stagione_num):02d}"
+    if cartella_stagione.exists() and cartella_stagione.is_dir():
+        shutil.rmtree(cartella_stagione)
+        print(f"Rimosso con successo dal disco: Season {int(stagione_num):02d} di '{titolo}'")
+
+    cartella_serie = Path(paths.anime_path) / nome_pulito
+    if cartella_serie.exists() and not any(p.is_dir() for p in cartella_serie.iterdir()):
+        shutil.rmtree(cartella_serie)
+        print(f"Rimosso con successo dal disco: '{titolo}' (nessuna stagione rimasta)")
+
+
 def rinfresca_libreria_jellyfin():
     """Invia un comando di scansione/refresh globale o mirato alle librerie di Jellyfin."""
     try:

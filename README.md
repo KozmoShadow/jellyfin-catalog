@@ -43,10 +43,12 @@ dashboard Streamlit.
    JELLYFIN_API_KEY=...
    SERIES_PATH=C:/percorso/verso/Serie
    FILMS_PATH=C:/percorso/verso/Film
+   ANIME_PATH=C:/percorso/verso/Anime
    ```
 
-   `SERIES_PATH` e `FILMS_PATH` sono opzionali: se li ometti, il catalogo viene
-   salvato nelle cartelle `Serie` e `Film` dentro il progetto.
+   `SERIES_PATH`, `FILMS_PATH` e `ANIME_PATH` sono opzionali: se li ometti, il
+   catalogo viene salvato nelle cartelle `Serie`, `Film` e `Anime` dentro il
+   progetto.
 
 3. Avvia la dashboard dalla cartella `dashboard/`:
 
@@ -57,10 +59,14 @@ dashboard Streamlit.
 ## Note
 
 - Il file `.env` non è versionato: non committare mai le chiavi API.
-- I file `.m3u8` / `.strm` vengono scritti nelle cartelle definite da `SERIES_PATH`
-  e `FILMS_PATH` nel `.env` (in `paths.py` ci sono solo i valori di default).
+- I file `.m3u8` / `.strm` vengono scritti nelle cartelle definite da `SERIES_PATH`,
+  `FILMS_PATH` e `ANIME_PATH` nel `.env` (in `paths.py` ci sono solo i default).
 - Le pagine **Film** e **Serie TV** usano l'endpoint `/discover` di TMDB con
   filtri per genere, anno, voto e ordinamento.
+- La pagina **Anime** usa la libreria `animeworld` (nessuna chiave API): la ricerca
+  avviene per titolo e i file `.strm` puntano agli URL `.mp4` diretti di AnimeWorld.
+  Ogni anime è una serie con una sola stagione (`Season 01`), salvo importare
+  stagioni separate nella stessa cartella indicando il numero desiderato.
 - La gestione Jellyfin è per contenuto: un film è un singolo file, mentre per le
   serie si aggiungono/rimuovono **intere stagioni** (`Stagione N`), con i singoli
   episodi (`S01E01`) disponibili come opzione.
