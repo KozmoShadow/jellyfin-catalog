@@ -130,6 +130,39 @@ def rimuovi_episodio(tmdb_id, nome_serie, stagione_num, episodio_num):
             print(f"Rimosso: {percorso.name}")
 
 
+def _cartella_stagione(tmdb_id, nome_serie, stagione_num):
+    return (
+        Path(paths.series_path)
+        / f"{tmdb_id} - {_titolo_pulito(nome_serie)}"
+        / f"Stagione {stagione_num}"
+    )
+
+
+def verifica_presenza_stagione(tmdb_id, nome_serie, stagione_num, episodi):
+    """Restituisce la lista dei numeri di episodio già presenti per una stagione."""
+    return [
+        n for n in episodi
+        if verifica_presenza_episodio(tmdb_id, nome_serie, stagione_num, n)
+    ]
+
+
+def rimuovi_stagione(tmdb_id, nome_serie, stagione_num):
+    """Rimuove l'intera cartella di una stagione.
+
+    Se non restano altre stagioni, elimina anche la cartella della serie,
+    così `verifica_presenza_jellyfin` ("serie in libreria") resta coerente.
+    """
+    cartella_stagione = _cartella_stagione(tmdb_id, nome_serie, stagione_num)
+    if cartella_stagione.exists() and cartella_stagione.is_dir():
+        shutil.rmtree(cartella_stagione)
+        print(f"Rimosso con successo dal disco: Stagione {stagione_num} di '{nome_serie}'")
+
+    cartella_serie = Path(paths.series_path) / f"{tmdb_id} - {_titolo_pulito(nome_serie)}"
+    if cartella_serie.exists() and not any(p.is_dir() for p in cartella_serie.iterdir()):
+        shutil.rmtree(cartella_serie)
+        print(f"Rimosso con successo dal disco: '{nome_serie}' (nessuna stagione rimasta)")
+
+
 def rinfresca_libreria_jellyfin():
     """Invia un comando di scansione/refresh globale o mirato alle librerie di Jellyfin."""
     try:

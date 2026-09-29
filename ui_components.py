@@ -11,7 +11,9 @@ from file_manager import (
     rimuovi_cartella_film,
     rimuovi_cartella_serie,
     verifica_presenza_episodio,
+    verifica_presenza_stagione,
     rimuovi_episodio,
+    rimuovi_stagione,
     rinfresca_libreria_jellyfin,
 )
 from estrattore import estrai_flussi
@@ -257,7 +259,7 @@ def _gestione_film(content_id, titolo, anno):
 
 
 def _gestione_serie(content_id, titolo):
-    """Gestione Jellyfin per una serie: seleziona stagione/episodio e agisce sull'episodio."""
+    """Gestione Jellyfin per una serie, a livello di stagione (con episodio singolo come opzione)."""
     st.subheader("⚙️ Gestione File Jellyfin")
 
     stagioni = tmdb.get_stagioni(content_id)
@@ -265,7 +267,12 @@ def _gestione_serie(content_id, titolo):
         st.info("Nessuna stagione disponibile per questa serie.")
         return
 
-    opzioni_stagioni = {s.get("name") or f"Stagione {s['season_number']}": s["season_number"] for s in stagioni}
+    opzioni_stagioni = {}
+    for s in stagioni:
+        nome = s.get("name") or f"Stagione {s['season_number']}"
+        num_ep = s.get("episode_count")
+        etichetta = f"{nome} ({num_ep} episodi)" if num_ep else nome
+        opzioni_stagioni[etichetta] = s["season_number"]
     nome_stagione = st.selectbox("Stagione", list(opzioni_stagioni.keys()))
     stagione_num = opzioni_stagioni[nome_stagione]
 
@@ -276,55 +283,65 @@ def _gestione_serie(content_id, titolo):
         st.info("Nessun episodio disponibile per questa stagione.")
         return
 
-    opzioni_episodi = {
-        f"{int(e.get('episode_number') or 0):02d} - {e.get('name') or 'Senza titolo'}": (e.get("episode_number") or 0)
-        for e in episodi
-    }
-    etichette = list(opzioni_episodi.keys())
+    numeri_episodi = [e.get("episode_number") or 0 for e in episodi]
+    titoli_episodi = {e.get("episode_number") or 0: e.get("name") or "Senza titolo" for e in episodi}
 
-    # Pre-selezione: primo episodio non ancora in libreria
-    indice_default = 0
-    for i, etichetta in enumerate(etichette):
-        if not verifica_presenza_episodio(content_id, titolo, stagione_num, opzioni_episodi[etichetta]):
-            indice_default = i
-            break
+    gia_presenti = verifica_presenza_stagione(content_id, titolo, stagione_num, numeri_episodi)
+    mancanti = [n for n in numeri_episodi if n not in gia_presenti]
 
-    etichetta_scelta = st.selectbox("Episodio", etichette, index=indice_default)
-    episodio_num = opzioni_episodi[etichetta_scelta]
-
-    gia_presente = verifica_presenza_episodio(content_id, titolo, stagione_num, episodio_num)
+    st.caption(
+        f"Episodi in questa stagione: **{len(numeri_episodi)}** — "
+        f"in libreria: **{len(gia_presenti)}** — mancanti: **{len(mancanti)}**"
+    )
 
     col_j1, col_j2 = st.columns(2)
 
     with col_j1:
-        if st.button("➕ Aggiungi episodio a Jellyfin", use_container_width=True):
-            with st.spinner("Estrazione flussi e creazione in corso..."):
-                try:
-                    url_pagina = f"https://vixsrc.to/tv/{content_id}/{stagione_num}/{episodio_num}?lang=it"
-                    video_link, audio_link = estrai_flussi(url_pagina)
-
-                    if video_link:
-                        crea_file_serie(content_id, titolo, stagione_num, episodio_num, video_link, audio_link)
-                        rinfresca_libreria_jellyfin()
-                        st.success(f"S{stagione_num:02d}E{episodio_num:02d} aggiunto e libreria aggiornata!")
-                        st.rerun()
-                    else:
-                        st.error("Impossibile estrarre i flussi video dal link sorgente.")
-                except Exception as e:
-                    st.error(f"Errore durante l'aggiunta: {e}")
+        if not mancanti:
+            st.button("✅ Stagione completa", use_container_width=True, disabled=True)
+        else:
+            if st.button(f"➕ Aggiungi stagione intera ({len(mancanti)} episodi)", use_container_width=True):
+                _aggiungi_stagione(content_id, titolo, stagione_num, mancanti)
 
     with col_j2:
-        if st.button("🗑️ Rimuovi episodio", use_container_width=True, disabled=not gia_presente):
+        if st.button("🗑️ Rimuovi stagione intera", use_container_width=True, disabled=not gia_presenti):
             try:
-                rimuovi_episodio(content_id, titolo, stagione_num, episodio_num)
+                rimuovi_stagione(content_id, titolo, stagione_num)
                 rinfresca_libreria_jellyfin()
-                st.warning(f"S{stagione_num:02d}E{episodio_num:02d} rimosso.")
+                st.warning(f"Stagione {stagione_num:02d} rimossa.")
                 st.rerun()
             except Exception as e:
-                st.error(f"Errore durante la rimozione: {e}")
+                st.error(f"Errore durante la rimozione della stagione: {e}")
 
-    if gia_presente:
-        st.caption(f"✅ S{stagione_num:02d}E{episodio_num:02d} è già presente in libreria.")
+    with st.expander("🎬 Gestione singolo episodio"):
+        opzioni_episodi = {
+            f"{n:02d} - {titoli_episodi[n]}": n for n in numeri_episodi
+        }
+        etichette = list(opzioni_episodi.keys())
+
+        indice_default = 0
+        for i, etichetta in enumerate(etichette):
+            if opzioni_episodi[etichetta] not in gia_presenti:
+                indice_default = i
+                break
+
+        etichetta_scelta = st.selectbox("Episodio", etichette, index=indice_default)
+        episodio_num = opzioni_episodi[etichetta_scelta]
+        gia_presente = episodio_num in gia_presenti
+
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            if st.button("➕ Aggiungi episodio", use_container_width=True, disabled=gia_presente):
+                _aggiungi_stagione(content_id, titolo, stagione_num, [episodio_num])
+        with col_e2:
+            if st.button("🗑️ Rimuovi episodio", use_container_width=True, disabled=not gia_presente):
+                try:
+                    rimuovi_episodio(content_id, titolo, stagione_num, episodio_num)
+                    rinfresca_libreria_jellyfin()
+                    st.warning(f"S{stagione_num:02d}E{episodio_num:02d} rimosso.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore durante la rimozione: {e}")
 
     st.markdown("---")
     if st.button("🗑️ Rimuovi l'intera serie da Jellyfin", use_container_width=True):
@@ -335,3 +352,37 @@ def _gestione_serie(content_id, titolo):
             st.rerun()
         except Exception as e:
             st.error(f"Errore durante la rimozione della serie: {e}")
+
+
+def _aggiungi_stagione(content_id, titolo, stagione_num, numeri_episodi):
+    """Aggiunge a Jellyfin una lista di episodi di una stagione, saltando quelli presenti."""
+    totale = len(numeri_episodi)
+    barra = st.progress(0.0, text=f"Preparazione di {totale} episodi...")
+    aggiunti, falliti = 0, 0
+
+    for i, episodio_num in enumerate(numeri_episodi, start=1):
+        if verifica_presenza_episodio(content_id, titolo, stagione_num, episodio_num):
+            continue
+
+        barra.progress(i / totale, text=f"Episodio {int(episodio_num):02d} ({i}/{totale})...")
+        try:
+            url_pagina = f"https://vixsrc.to/tv/{content_id}/{stagione_num}/{episodio_num}?lang=it"
+            video_link, audio_link = estrai_flussi(url_pagina)
+            if video_link:
+                crea_file_serie(content_id, titolo, stagione_num, episodio_num, video_link, audio_link)
+                aggiunti += 1
+            else:
+                falliti += 1
+        except Exception:
+            falliti += 1
+
+    barra.empty()
+
+    if aggiunti:
+        rinfresca_libreria_jellyfin()
+
+    if falliti:
+        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.")
+    else:
+        st.success(f"{aggiunti} episodi aggiunti e libreria Jellyfin aggiornata!")
+    st.rerun()
