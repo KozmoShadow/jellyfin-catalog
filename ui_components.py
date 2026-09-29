@@ -696,6 +696,14 @@ def _gestione_anime(titolo, episodi, link_anime=None):
     """Gestione Jellyfin per un anime: stagione unica (Season 01) di default."""
     st.subheader("⚙️ Gestione File Jellyfin")
 
+    # Il messaggio dell'ultima aggiunta/rimozione viene salvato in session_state
+    # perché `st.rerun()` azzera gli elementi creati nello stesso run: senza
+    # questo, l'esito (compreso "0 aggiunti") sparisce subito.
+    esito = st.session_state.pop("anime_msg", None)
+    if esito:
+        testo, livello = esito
+        (st.success if livello == "ok" else st.warning)(testo)
+
     # Mappa numero -> oggetto Episodio, così i link si risolvono senza riscaricare
     # la lista episodi a ogni click (una sola richiesta per episodio, non due).
     mappa_episodi = {str(ep.number): ep for ep in episodi}
@@ -812,11 +820,22 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
     except Exception:
         pass
 
+    percorso = f"{paths.anime_path}/{titolo}/{f'Season {int(stagione_num):02d}'}"
     if falliti:
         dettaglio = f" Ultimo errore: {ultimo_errore}." if ultimo_errore else ""
-        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.{dettaglio}")
+        st.session_state["anime_msg"] = (
+            f"{aggiunti} episodi aggiunti, {falliti} non riusciti.{dettaglio}",
+            "warn",
+        )
     elif aggiunti == 0:
-        st.info("Nessun nuovo episodio da aggiungere: erano già tutti presenti.")
+        st.session_state["anime_msg"] = (
+            "Nessun nuovo episodio da aggiungere: erano già tutti presenti "
+            f"in `{percorso}`.",
+            "warn",
+        )
     else:
-        st.success(f"{aggiunti} episodi aggiunti e libreria Jellyfin aggiornata.")
+        st.session_state["anime_msg"] = (
+            f"{aggiunti} episodi aggiunti in `{percorso}`.",
+            "ok",
+        )
     st.rerun()
