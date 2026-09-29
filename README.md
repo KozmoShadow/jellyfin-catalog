@@ -84,7 +84,11 @@ dashboard Streamlit.
 - La pagina **Manutenzione** (`dashboard/pages/Manutenzione.py`) aiuta a tenere in
   ordine la libreria: i link di film e serie sono URL **firmati vixsrc** che
   scadono col tempo, quindi il video smette di partire anche se il file c'è.
-  La pagina scansiona le tre librerie, **verifica** quali link rispondono ancora
+  La pagina è divisa in tre schede indipendenti (**Film**, **Serie TV**, **Anime**):
+  ognuna scansiona la propria libreria, **verifica** quali link rispondono ancora
   e permette di **rigenerare** i file rotti (ri-estraendo da vixsrc, o
   re-risolvendo l'episodio anime da AnimeWorld) oppure di rimuoverli.
-  Rigenerare una serie richiede Playwright installato, come per l'aggiunta.
+  Per non rifare tutto ogni volta, c'è anche un **controllo mirato**: si può
+  verificare una sola opera, una stagione o un singolo episodio (comodo con serie
+  lunghe come One Piece). Rigenerare film/serie richiede Playwright installato,
+  come per l'aggiunta.

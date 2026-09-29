@@ -66,7 +66,8 @@ def _voce(tipo, titolo, cartella, file_media, strm, file_verifica, **extra):
     return voce
 
 
-def _scansiona_film():
+def scansiona_film():
+    """Scansiona solo la libreria film."""
     voci = []
     radice = Path(paths.films_path)
     if not radice.exists():
@@ -141,13 +142,19 @@ def _scansiona_episodi(tipo, radice, con_id):
     return voci
 
 
+def scansiona_serie():
+    """Scansiona solo la libreria serie TV."""
+    return _scansiona_episodi("serie", paths.series_path, con_id=True)
+
+
+def scansiona_anime():
+    """Scansiona solo la libreria anime."""
+    return _scansiona_episodi("anime", paths.anime_path, con_id=False)
+
+
 def scansiona_catalogo():
     """Restituisce la lista di tutti i file di catalogo trovati nelle tre librerie."""
-    return (
-        _scansiona_film()
-        + _scansiona_episodi("serie", paths.series_path, con_id=True)
-        + _scansiona_episodi("anime", paths.anime_path, con_id=False)
-    )
+    return scansiona_film() + scansiona_serie() + scansiona_anime()
 
 
 # ==========================================
