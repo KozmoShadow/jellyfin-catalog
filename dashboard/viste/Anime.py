@@ -67,7 +67,7 @@ query = st.text_input(
 # --- Modalità: ricerca testuale oppure esplorazione con filtri ---
 if query:
     with st.spinner("Ricerca su AnimeWorld..."):
-        risultati = anime_api.cerca_anime(query)
+        risultati = anime_api.cerca_anime_tollerante(query)
 
     if risultati:
         st.caption(f"Trovati {len(risultati)} risultati su AnimeWorld")

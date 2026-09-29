@@ -21,6 +21,7 @@ from file_manager import (
     rimuovi_episodio,
     rimuovi_stagione,
     crea_file_anime,
+    salva_origine_stagione_anime,
     verifica_presenza_episodio_anime,
     verifica_presenza_stagione_anime,
     rimuovi_episodio_anime,
@@ -688,12 +689,20 @@ def render_scheda_anime(link_anime, titolo_sessione, copertina_sessione):
         st.info("Nessun episodio disponibile per questo anime.")
         st.stop()
 
-    _gestione_anime(titolo, episodi)
+    _gestione_anime(titolo, episodi, link_anime)
 
 
-def _gestione_anime(titolo, episodi):
+def _gestione_anime(titolo, episodi, link_anime=None):
     """Gestione Jellyfin per un anime: stagione unica (Season 01) di default."""
     st.subheader("⚙️ Gestione File Jellyfin")
+
+    # Il messaggio dell'ultima aggiunta/rimozione viene salvato in session_state
+    # perché `st.rerun()` azzera gli elementi creati nello stesso run: senza
+    # questo, l'esito (compreso "0 aggiunti") sparisce subito.
+    esito = st.session_state.pop("anime_msg", None)
+    if esito:
+        testo, livello = esito
+        (st.success if livello == "ok" else st.warning)(testo)
 
     # Mappa numero -> oggetto Episodio, così i link si risolvono senza riscaricare
     # la lista episodi a ogni click (una sola richiesta per episodio, non due).
@@ -730,7 +739,7 @@ def _gestione_anime(titolo, episodi):
             st.button("✅ Stagione completa", use_container_width=True, disabled=True)
         else:
             if st.button(f"➕ Aggiungi stagione intera ({len(mancanti)} episodi)", use_container_width=True):
-                _aggiungi_stagione_anime(titolo_cartella, stagione_num, mancanti, mappa_episodi)
+                _aggiungi_stagione_anime(titolo_cartella, stagione_num, mancanti, mappa_episodi, link_anime)
 
     with col_j2:
         if st.button("🗑️ Rimuovi stagione intera", use_container_width=True, disabled=not gia_presenti):
@@ -749,7 +758,7 @@ def _gestione_anime(titolo, episodi):
         col_e1, col_e2 = st.columns(2)
         with col_e1:
             if st.button("➕ Aggiungi episodio", use_container_width=True, disabled=gia_presente):
-                _aggiungi_stagione_anime(titolo_cartella, stagione_num, [episodio_num], mappa_episodi)
+                _aggiungi_stagione_anime(titolo_cartella, stagione_num, [episodio_num], mappa_episodi, link_anime)
         with col_e2:
             if st.button("🗑️ Rimuovi episodio", use_container_width=True, disabled=not gia_presente):
                 try:
@@ -771,11 +780,12 @@ def _gestione_anime(titolo, episodi):
             st.error(f"Errore durante la rimozione della serie: {e}")
 
 
-def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi):
+def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi, link_anime=None):
     """Crea i file .strm di una stagione anime risolvendo i link .mp4, saltando i presenti."""
     totale = len(numeri_episodi)
     barra = st.progress(0.0, text=f"Preparazione di {totale} episodi...")
     aggiunti, falliti = 0, 0
+    ultimo_errore = None
 
     for i, episodio_num in enumerate(numeri_episodi, start=1):
         if verifica_presenza_episodio_anime(titolo, stagione_num, episodio_num):
@@ -783,16 +793,28 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
 
         barra.progress(i / totale, text=f"Episodio {episodio_num} ({i}/{totale})...")
         try:
-            link = anime_api.link_mp4(mappa_episodi.get(episodio_num))
+            episodio = mappa_episodi.get(episodio_num)
+            link = anime_api.link_mp4(episodio)
             if link:
                 crea_file_anime(titolo, stagione_num, episodio_num, link)
                 aggiunti += 1
             else:
                 falliti += 1
-        except Exception:
+                if ultimo_errore is None:
+                    ultimo_errore = anime_api.motivo_link_mancante(episodio)
+        except Exception as e:
+            ultimo_errore = f"{type(e).__name__}: {e}"
             falliti += 1
 
     barra.empty()
+
+    # Ricorda la pagina AnimeWorld della stagione: la manutenzione la userà per
+    # rigenerare gli episodi senza ambiguità tra più stagioni.
+    if aggiunti and link_anime:
+        try:
+            salva_origine_stagione_anime(titolo, stagione_num, anime_api.link_pagina_anime(link_anime))
+        except Exception:
+            pass
 
     # Il refresh Jellyfin non deve bloccare il risultato: senza Jellyfin
     # configurato i file sono comunque già stati creati sul disco.
@@ -801,10 +823,22 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
     except Exception:
         pass
 
+    percorso = f"{paths.anime_path}/{titolo}/{f'Season {int(stagione_num):02d}'}"
     if falliti:
-        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.")
+        dettaglio = f" Ultimo errore: {ultimo_errore}." if ultimo_errore else ""
+        st.session_state["anime_msg"] = (
+            f"{aggiunti} episodi aggiunti, {falliti} non riusciti.{dettaglio}",
+            "warn",
+        )
     elif aggiunti == 0:
-        st.info("Nessun nuovo episodio da aggiungere: erano già tutti presenti.")
+        st.session_state["anime_msg"] = (
+            "Nessun nuovo episodio da aggiungere: erano già tutti presenti "
+            f"in `{percorso}`.",
+            "warn",
+        )
     else:
-        st.success(f"{aggiunti} episodi aggiunti e libreria Jellyfin aggiornata.")
+        st.session_state["anime_msg"] = (
+            f"{aggiunti} episodi aggiunti in `{percorso}`.",
+            "ok",
+        )
     st.rerun()

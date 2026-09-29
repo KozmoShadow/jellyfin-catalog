@@ -184,6 +184,40 @@ def crea_file_anime(titolo, stagione_num, episodio_num, link_stream):
     print(f"Generato con successo: {base.name}.strm per l'anime '{titolo}'")
 
 
+# Nome del file (nascosto) che ricorda la pagina AnimeWorld di una stagione.
+NOME_FILE_ORIGINE = ".animeworld"
+
+
+def _percorso_origine_anime(titolo, stagione_num):
+    nome_pulito = _titolo_pulito(titolo)
+    return (
+        Path(paths.anime_path) / nome_pulito / f"Season {int(stagione_num):02d}"
+        / NOME_FILE_ORIGINE
+    )
+
+
+def salva_origine_stagione_anime(titolo, stagione_num, link_anime):
+    """Salva in un file nascosto la pagina AnimeWorld della stagione.
+
+    Serve alla manutenzione per rigenerare gli episodi senza dover ri-cercare
+    l'anime per titolo, che con più stagioni sarebbe ambiguo. Il file vive
+    dentro la cartella della stagione, quindi sparisce con essa.
+    """
+    percorso = _percorso_origine_anime(titolo, stagione_num)
+    percorso.parent.mkdir(parents=True, exist_ok=True)
+    with open(percorso, "w", encoding="utf-8") as f:
+        f.write(link_anime + "\n")
+
+
+def leggi_origine_stagione_anime(titolo, stagione_num):
+    """Legge la pagina AnimeWorld salvata per una stagione, o None se assente."""
+    percorso = _percorso_origine_anime(titolo, stagione_num)
+    if percorso.exists():
+        contenuto = percorso.read_text(encoding="utf-8").strip()
+        return contenuto or None
+    return None
+
+
 def verifica_presenza_episodio_anime(titolo, stagione_num, episodio_num):
     """Verifica se il singolo episodio anime è già presente in libreria."""
     return _percorso_episodio_anime(titolo, stagione_num, episodio_num).with_suffix(".strm").exists()

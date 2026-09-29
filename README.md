@@ -9,13 +9,18 @@ dashboard Streamlit.
 ```
 .
 ├── dashboard/
-│   ├── Home.py            # Home: ricerca + slider film/serie + scheda dettagli
-│   └── pages/
+│   ├── Home.py            # Entry point: registra la navigazione (st.navigation)
+│   └── viste/
+│       ├── Home.py        # Home: ricerca + slider film/serie/anime + scheda dettagli
 │       ├── Film.py        # Catalogo film con filtri
-│       └── Serie TV.py    # Catalogo serie TV con filtri
+│       ├── Serie TV.py    # Catalogo serie TV con filtri
+│       ├── Anime.py       # Catalogo anime (AniList + AnimeWorld)
+│       └── Serie TV/
+│           └── 2_Manutenzione.py # Controllo e rigenerazione dei link scaduti
 ├── config.py              # Carica i segreti dal file .env
 ├── estrattore.py          # Estrazione dei flussi video/audio (Playwright)
 ├── file_manager.py        # Creazione/rimozione file .m3u8/.strm e refresh Jellyfin
+├── manutenzione.py        # Scansione, verifica e rigenerazione dei link del catalogo
 ├── paths.py               # Percorsi di libreria e configurazione Jellyfin
 ├── tmdb.py                # Client TMDB (ricerca, popolari, discover, dettagli)
 ├── ui_components.py       # Componenti UI condivisi (griglia + scheda dettagli)
@@ -78,3 +83,21 @@ dashboard Streamlit.
 - La gestione Jellyfin è per contenuto: un film è un singolo file, mentre per le
   serie si aggiungono/rimuovono **intere stagioni** (`Stagione N`), con i singoli
   episodi (`S01E01`) disponibili come opzione.
+- La pagina **Manutenzione** (sotto la sezione **Serie TV**,
+  `dashboard/viste/Serie TV/2_Manutenzione.py`) aiuta a tenere in
+  ordine la libreria: i link di film e serie sono URL **firmati vixsrc** che
+  scadono col tempo, quindi il video smette di partire anche se il file c'è.
+  La pagina è divisa in tre schede indipendenti (**Film**, **Serie TV**, **Anime**):
+  ognuna scansiona la propria libreria, **verifica** quali link rispondono ancora
+  e permette di **rigenerare** i file rotti (ri-estraendo da vixsrc, o
+  re-risolvendo l'episodio anime da AnimeWorld) oppure di rimuoverli.
+  Per non rifare tutto ogni volta, c'è anche un **controllo mirato**: si può
+  verificare una sola opera, una stagione o un singolo episodio (comodo con serie
+  lunghe come One Piece). Rigenerare film/serie richiede Playwright installato,
+  come per l'aggiunta.
+- Per gli anime, ogni stagione importata salva accanto ai `.strm` un file nascosto
+  `.animeworld` con la pagina AnimeWorld di quella stagione. Serve alla
+  manutenzione per rigenerare gli episodi giusti anche quando più stagioni hanno
+  lo stesso titolo cartella (es. *My Hero Academia* S1/S2); senza quel file si
+  ripiega sulla ricerca per titolo. Il `.strm` contiene sempre l'URL `.mp4`
+  diretto, mai la pagina `animeworld.ac`.
