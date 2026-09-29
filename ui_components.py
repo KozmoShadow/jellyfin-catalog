@@ -1,9 +1,13 @@
 """Componenti UI condivisi tra le pagine Streamlit (griglia risultati + scheda dettagli)."""
 
+import urllib.parse
+
 import streamlit as st
 import streamlit.components.v1 as components
 
 import tmdb
+import anime_api
+import paths
 from file_manager import (
     verifica_presenza_jellyfin,
     crea_cartella_film,
@@ -14,26 +18,17 @@ from file_manager import (
     verifica_presenza_stagione,
     rimuovi_episodio,
     rimuovi_stagione,
+    crea_file_anime,
+    verifica_presenza_episodio_anime,
+    verifica_presenza_stagione_anime,
+    rimuovi_episodio_anime,
+    rimuovi_stagione_anime,
     rinfresca_libreria_jellyfin,
 )
 from estrattore import estrai_flussi
 
 
-def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"):
-    """Renderizza una griglia di card cliccabili (poster + titolo + anno + tipo).
-
-    link_path è la rotta a cui puntano le card (es. "/Film" per la pagina film).
-    """
-    st.subheader(titolo_sezione)
-
-    if not items:
-        st.info("Nessun risultato trovato.")
-        return
-
-    num_righe = (len(items) + 5) // 6
-    altezza_box = num_righe * 218
-
-    html_code = """
+_GRID_STYLE = """
     <style>
     body {
         background-color: transparent;
@@ -99,6 +94,23 @@ def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"
     <div class="grid-container">
     """
 
+
+def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"):
+    """Renderizza una griglia di card cliccabili (poster + titolo + anno + tipo).
+
+    link_path è la rotta a cui puntano le card (es. "/Film" per la pagina film).
+    """
+    st.subheader(titolo_sezione)
+
+    if not items:
+        st.info("Nessun risultato trovato.")
+        return
+
+    num_righe = (len(items) + 5) // 6
+    altezza_box = num_righe * 218
+
+    html_code = _GRID_STYLE
+
     for item in items:
         poster_path = item.get("poster_path")
         title = item.get("title") or item.get("name") or "Senza titolo"
@@ -118,6 +130,51 @@ def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"
             <a href="{link_path}?id={item.get('id')}&type={media_type}" target="{target}">
                 <img src="{img_url}" alt="{title}">
                 <div class="grid-title" title="{title}">{title}</div>
+                <div class="grid-year">({year})</div>
+                <div class="grid-type">{tipo_str}</div>
+            </a>
+        </div>
+        """
+
+    html_code += """
+    </div>
+    """
+
+    components.html(html_code, height=altezza_box, scrolling=True)
+
+
+def mostra_griglia_anime(items):
+    """Renderizza la griglia dei risultati AnimeWorld (card cliccabili per il dettaglio).
+
+    Ogni card apre la pagina /Anime passando il link AnimeWorld dell'anime.
+    """
+    if not items:
+        st.info("Nessun risultato trovato.")
+        return
+
+    num_righe = (len(items) + 5) // 6
+    altezza_box = num_righe * 218
+
+    html_code = _GRID_STYLE
+
+    for item in items:
+        titolo = item.get("name") or "Senza titolo"
+        link = item.get("link", "")
+        img_url = item.get("image") or "https://via.placeholder.com/140x210?text=No+Image"
+        year = item.get("year") or ""
+        tipo_str = "ITA" if item.get("dub") else "SUB ITA"
+
+        href = (
+            f"/Anime?link={urllib.parse.quote(link, safe='')}"
+            f"&titolo={urllib.parse.quote(titolo)}"
+            f"&copertina={urllib.parse.quote(img_url, safe='')}"
+        )
+
+        html_code += f"""
+        <div class="grid-item">
+            <a href="{href}" target="vixsrc_details">
+                <img src="{img_url}" alt="{titolo}">
+                <div class="grid-title" title="{titolo}">{titolo}</div>
                 <div class="grid-year">({year})</div>
                 <div class="grid-type">{tipo_str}</div>
             </a>
@@ -385,4 +442,194 @@ def _aggiungi_stagione(content_id, titolo, stagione_num, numeri_episodi):
         st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.")
     else:
         st.success(f"{aggiunti} episodi aggiunti e libreria Jellyfin aggiornata!")
+    st.rerun()
+
+
+# ==========================================
+# ⛩️ ANIME (scheda dettaglio + gestione Jellyfin)
+# ==========================================
+
+def render_scheda_anime(link_anime, titolo_sessione, copertina_sessione):
+    """Scheda dettaglio di un anime: info, trama e gestione Jellyfin a stagioni.
+
+    titolo_sessione/copertina_sessione arrivano dalla card cliccata e servono per
+    mostrare subito qualcosa mentre si caricano i dettagli dall'API.
+    """
+    try:
+        dettagli = anime_api.dettagli_anime(link_anime)
+    except Exception as e:
+        st.error(f"Impossibile caricare i dettagli dell'anime: {e}")
+        st.stop()
+
+    titolo = dettagli["nome"] or titolo_sessione or "Senza titolo"
+    info = dettagli.get("info", {}) or {}
+    copertina = dettagli.get("copertina") or copertina_sessione
+
+    col_poster, col_info = st.columns([1, 2.5], gap="large")
+
+    with col_poster:
+        if copertina:
+            st.image(copertina, use_container_width=True)
+        else:
+            st.image("https://via.placeholder.com/300x450?text=No+Image", use_container_width=True)
+
+    with col_info:
+        st.title(titolo)
+
+        badges = []
+        if info.get("Voto"):
+            badges.append(f"⭐ **{info['Voto']}**")
+        if info.get("Genere"):
+            badges.append(f"🎭 {', '.join(info['Genere'])}")
+        if info.get("Stato"):
+            badges.append(f"📌 {info['Stato']}")
+        if info.get("Episodi"):
+            badges.append(f"🎞️ {info['Episodi']} episodi")
+        if badges:
+            st.markdown(" &nbsp;&bull;&nbsp; ".join(badges))
+
+        st.markdown("### Trama")
+        st.write(dettagli.get("trama") or "Trama non disponibile.")
+
+        extra = []
+        for chiave, prefisso in [("Studio", "🏢 Studio"), ("Durata", "⏱️ Durata"),
+                                 ("Data di Uscita", "📅 Uscita"), ("Audio", "🔊 Audio")]:
+            if info.get(chiave):
+                extra.append(f"{prefisso}: {info[chiave]}")
+        if extra:
+            st.caption(" &nbsp;&bull;&nbsp; ".join(extra))
+
+    st.markdown("---")
+
+    # Gli episodi li scarichiamo una sola volta e li teniamo per contare
+    # quanto episodi sono presenti in libreria per la stagione scelta.
+    try:
+        episodi = anime_api.episodi(link_anime)
+    except Exception as e:
+        st.error(f"Impossibile caricare gli episodi: {e}")
+        st.stop()
+
+    if not episodi:
+        st.info("Nessun episodio disponibile per questo anime.")
+        st.stop()
+
+    _gestione_anime(titolo, episodi)
+
+
+def _gestione_anime(titolo, episodi):
+    """Gestione Jellyfin per un anime: stagione unica (Season 01) di default."""
+    st.subheader("⚙️ Gestione File Jellyfin")
+
+    # Mappa numero -> oggetto Episodio, così i link si risolvono senza riscaricare
+    # la lista episodi a ogni click (una sola richiesta per episodio, non due).
+    mappa_episodi = {str(ep.number): ep for ep in episodi}
+    numeri_episodi = list(mappa_episodi.keys())
+
+    # Nome cartella + numero stagione: di solito un anime AnimeWorld è una serie
+    # unica (Season 01). Se l'anime ha stagioni separate sul sito, si importano
+    # nella stessa cartella indicando qui il numero di stagione desiderato.
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        titolo_cartella = st.text_input(
+            "📁 Nome serie (cartella principale)",
+            value=titolo,
+            help="Tutte le stagioni importate con questo nome finiscono nella stessa cartella.",
+        )
+    with col_b:
+        stagione_num = st.number_input("Stagione n°", min_value=1, max_value=99, value=1)
+
+    st.caption(f"Percorso: `{paths.anime_path}/{titolo_cartella}/Season {int(stagione_num):02d}`")
+
+    gia_presenti = verifica_presenza_stagione_anime(titolo_cartella, stagione_num, numeri_episodi)
+    mancanti = [n for n in numeri_episodi if n not in gia_presenti]
+
+    st.caption(
+        f"Episodi disponibili: **{len(numeri_episodi)}** — "
+        f"in libreria: **{len(gia_presenti)}** — mancanti: **{len(mancanti)}**"
+    )
+
+    col_j1, col_j2 = st.columns(2)
+
+    with col_j1:
+        if not mancanti:
+            st.button("✅ Stagione completa", use_container_width=True, disabled=True)
+        else:
+            if st.button(f"➕ Aggiungi stagione intera ({len(mancanti)} episodi)", use_container_width=True):
+                _aggiungi_stagione_anime(titolo_cartella, stagione_num, mancanti, mappa_episodi)
+
+    with col_j2:
+        if st.button("🗑️ Rimuovi stagione intera", use_container_width=True, disabled=not gia_presenti):
+            try:
+                rimuovi_stagione_anime(titolo_cartella, stagione_num)
+                rinfresca_libreria_jellyfin()
+                st.warning(f"Season {int(stagione_num):02d} rimossa.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Errore durante la rimozione della stagione: {e}")
+
+    with st.expander("🎬 Gestione singolo episodio"):
+        episodio_num = st.selectbox("Episodio", numeri_episodi, format_func=lambda n: f"Episodio {n}")
+        gia_presente = episodio_num in gia_presenti
+
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            if st.button("➕ Aggiungi episodio", use_container_width=True, disabled=gia_presente):
+                _aggiungi_stagione_anime(titolo_cartella, stagione_num, [episodio_num], mappa_episodi)
+        with col_e2:
+            if st.button("🗑️ Rimuovi episodio", use_container_width=True, disabled=not gia_presente):
+                try:
+                    rimuovi_episodio_anime(titolo_cartella, stagione_num, episodio_num)
+                    rinfresca_libreria_jellyfin()
+                    st.warning(f"S{int(stagione_num):02d}E{int(episodio_num):02d} rimosso.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore durante la rimozione: {e}")
+
+    st.markdown("---")
+    if st.button("🗑️ Rimuovi l'intera serie da Jellyfin", use_container_width=True):
+        try:
+            rimuovi_stagione_anime(titolo_cartella, stagione_num)
+            rinfresca_libreria_jellyfin()
+            st.warning(f"Serie '{titolo_cartella}' rimossa.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Errore durante la rimozione della serie: {e}")
+
+
+def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi):
+    """Crea i file .strm di una stagione anime risolvendo i link .mp4, saltando i presenti."""
+    totale = len(numeri_episodi)
+    barra = st.progress(0.0, text=f"Preparazione di {totale} episodi...")
+    aggiunti, falliti = 0, 0
+
+    for i, episodio_num in enumerate(numeri_episodi, start=1):
+        if verifica_presenza_episodio_anime(titolo, stagione_num, episodio_num):
+            continue
+
+        barra.progress(i / totale, text=f"Episodio {episodio_num} ({i}/{totale})...")
+        try:
+            link = anime_api.link_mp4(mappa_episodi.get(episodio_num))
+            if link:
+                crea_file_anime(titolo, stagione_num, episodio_num, link)
+                aggiunti += 1
+            else:
+                falliti += 1
+        except Exception:
+            falliti += 1
+
+    barra.empty()
+
+    # Il refresh Jellyfin non deve bloccare il risultato: senza Jellyfin
+    # configurato i file sono comunque già stati creati sul disco.
+    try:
+        rinfresca_libreria_jellyfin()
+    except Exception:
+        pass
+
+    if falliti:
+        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.")
+    elif aggiunti == 0:
+        st.info("Nessun nuovo episodio da aggiungere: erano già tutti presenti.")
+    else:
+        st.success(f"{aggiunti} episodi aggiunti e libreria Jellyfin aggiornata.")
     st.rerun()
