@@ -247,6 +247,122 @@ def mostra_griglia_scoperta_anime(items):
     st.html(html_code)
 
 
+_SLIDER_STYLE = """
+    <style>
+    body {
+        background-color: transparent;
+        color: white;
+        font-family: sans-serif;
+        margin: 0;
+        padding: 5px 0;
+    }
+    .scroll-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 16px;
+        padding-bottom: 15px;
+        scroll-behavior: smooth;
+        align-items: flex-start;
+    }
+    .scroll-container::-webkit-scrollbar { height: 8px; }
+    .scroll-container::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.05);
+        border-radius: 4px;
+    }
+    .scroll-container::-webkit-scrollbar-thumb {
+        background: rgba(150,150,150,0.5);
+        border-radius: 4px;
+    }
+    .scroll-item { flex: 0 0 140px; text-align: center; }
+    .scroll-item a { text-decoration: none; color: inherit; display: block; }
+    .scroll-item img {
+        width: 140px;
+        height: 210px;
+        object-fit: cover;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+    .scroll-item img:hover { transform: scale(1.03); }
+    .scroll-title {
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 6px;
+        line-height: 1.2;
+        height: 28px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .scroll-year { font-size: 11px; color: #a0a0a0; margin-top: 2px; }
+    </style>
+    """
+
+
+def mostra_slider_orizzontale(titolo_sezione, cards):
+    """Riga a scorrimento orizzontale di card (copertina + titolo + riga info).
+
+    `cards` è una lista di dizionari con chiavi: titolo, img, href, meta.
+    """
+    st.subheader(titolo_sezione)
+
+    if not cards:
+        st.info("Nessun contenuto disponibile.")
+        return
+
+    html_code = _SLIDER_STYLE + "<div class='scroll-container'>"
+
+    for card in cards:
+        titolo = html.escape(card.get("titolo") or "Senza titolo")
+        img_url = html.escape(card.get("img") or "", quote=True)
+        href = card.get("href", "")
+        meta = card.get("meta", "")
+        html_code += f"""
+        <div class="scroll-item">
+            <a href="{href}" target="vixsrc_details">
+                <img src="{img_url}" alt="{titolo}">
+                <div class="scroll-title" title="{titolo}">{titolo}</div>
+                <div class="scroll-year">{meta}</div>
+            </a>
+        </div>
+        """
+
+    html_code += "</div>"
+    components.html(html_code, height=290, scrolling=False)
+
+
+def card_da_tmdb(item):
+    """Converte un risultato TMDB nella card dello slider."""
+    poster_path = item.get("poster_path")
+    anno = (item.get("release_date") or item.get("first_air_date") or "")[:4]
+    m_type = item.get("media_type") or ("tv" if "name" in item else "movie")
+    return {
+        "titolo": item.get("title") or item.get("name") or "Senza titolo",
+        "img": f"{tmdb.IMG_BASE_URL}{poster_path}" if poster_path else "",
+        "href": f"/?id={item.get('id')}&type={m_type}",
+        "meta": f"({anno})",
+    }
+
+
+def card_da_anilist(item):
+    """Converte un risultato AniList nella card dello slider.
+
+    Il click porta alla ricerca su AnimeWorld (stesso flusso della griglia anime).
+    """
+    titolo = anilist.titolo_italiano(item) or "Senza titolo"
+    pezzi = [str(item["seasonYear"])] if item.get("seasonYear") else []
+    if item.get("averageScore"):
+        pezzi.append(f"⭐ {item['averageScore'] / 10:.1f}")
+    return {
+        "titolo": titolo,
+        "img": (item.get("coverImage") or {}).get("large") or "",
+        "href": f"/Anime?cerca={urllib.parse.quote(titolo)}",
+        "meta": " &bull; ".join(pezzi),
+    }
+
+
 def render_scheda_dettagli(content_type, content_id):
     """Renderizza la scheda di dettaglio (poster, badge, trailer, cast) e la gestione Jellyfin.
 
