@@ -777,6 +777,7 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
     totale = len(numeri_episodi)
     barra = st.progress(0.0, text=f"Preparazione di {totale} episodi...")
     aggiunti, falliti = 0, 0
+    ultimo_errore = None
 
     for i, episodio_num in enumerate(numeri_episodi, start=1):
         if verifica_presenza_episodio_anime(titolo, stagione_num, episodio_num):
@@ -790,7 +791,8 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
                 aggiunti += 1
             else:
                 falliti += 1
-        except Exception:
+        except Exception as e:
+            ultimo_errore = f"{type(e).__name__}: {e}"
             falliti += 1
 
     barra.empty()
@@ -811,7 +813,8 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
         pass
 
     if falliti:
-        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.")
+        dettaglio = f" Ultimo errore: {ultimo_errore}." if ultimo_errore else ""
+        st.warning(f"{aggiunti} episodi aggiunti, {falliti} non riusciti.{dettaglio}")
     elif aggiunti == 0:
         st.info("Nessun nuovo episodio da aggiungere: erano già tutti presenti.")
     else:

@@ -214,16 +214,19 @@ def _sezione(sezione):
     st.subheader("❌ File rotti")
 
     if chiave == "anime":
-        # Gli episodi dello stesso titolo si rigenerano insieme (una ricerca AnimeWorld)
+        # Si rigenera una stagione alla volta: titoli uguali ma stagioni diverse
+        # hanno origini AnimeWorld diverse, quindi vanno tenuti separati.
         gruppi = {}
         for v in rotti:
-            gruppi.setdefault(v["titolo"], []).append(v)
-        st.caption("Per gli anime, gli episodi dello stesso titolo si rigenerano insieme.")
-        for titolo, gruppo in gruppi.items():
+            gruppi.setdefault((v["titolo"], v.get("stagione")), []).append(v)
+        st.caption("Per gli anime si rigenera una stagione alla volta.")
+        for (titolo, stagione), gruppo in gruppi.items():
             episodi = ", ".join(f"E{v['episodio']:02d}" for v in gruppo if v.get("episodio"))
+            etichetta_stagione = f"S{int(stagione):02d}" if stagione else ""
+            chiave_gruppo = f"{titolo}_{stagione}"
             cols = st.columns([3, 1, 1])
-            cols[0].write(f"❌ **{titolo}** — {episodi}")
-            if cols[1].button("♻️ Rigenera", key=f"{prefisso}rig_{titolo}"):
+            cols[0].write(f"❌ **{titolo}** {etichetta_stagione} — {episodi}")
+            if cols[1].button("♻️ Rigenera", key=f"{prefisso}rig_{chiave_gruppo}"):
                 with st.spinner(f"Rigenero {titolo}..."):
                     ok_n, falliti, _ = manutenzione.rigenera_episodi_anime(titolo, gruppo)
                 if ok_n:
@@ -233,7 +236,7 @@ def _sezione(sezione):
                     "ok" if not falliti else "warn",
                 )
                 st.rerun()
-            if cols[2].button("🗑️ Rimuovi", key=f"{prefisso}rm_{titolo}"):
+            if cols[2].button("🗑️ Rimuovi", key=f"{prefisso}rm_{chiave_gruppo}"):
                 rimossi = 0
                 for voce in gruppo:
                     for percorso in (voce.get("file_media"), voce.get("file_strm")):

@@ -20,6 +20,7 @@ from file_manager import (
     crea_cartella_film,
     crea_file_serie,
     crea_file_anime,
+    salva_origine_stagione_anime,
 )
 
 _USER_AGENT = (
@@ -275,31 +276,49 @@ def rigenera_episodi_anime(titolo, voci, link_anime=None):
     else:
         # Fallback: nessun file di origine, si cerca per titolo (ambiguo con più stagioni)
         try:
-            risultati = anime_api.cerca_anime(titolo)
+            risultati = anime_api.cerca_anime_tollerante(titolo)
         except Exception as e:
             return 0, len(voci), f"ricerca AnimeWorld fallita: {e}"
 
         if not risultati:
             return 0, len(voci), "anime non trovato su AnimeWorld"
 
-        migliore = next(
-            (r for r in risultati if (r.get("name") or "").strip().lower() == titolo.strip().lower()),
-            risultati[0],
-        )
+        migliore = anime_api.miglior_risultato(titolo, risultati)
 
         try:
             episodi = anime_api.episodi(migliore["link"])
         except Exception as e:
             return 0, len(voci), f"lettura episodi fallita: {e}"
 
+        # Ricorda l'origine trovata, così la prossima volta è affidabile quanto
+        # una stagione importata con questa versione del codice.
+        link_anime = migliore.get("link")
+
     mappa = {str(ep.number): ep for ep in episodi}
     ok = falliti = 0
     for voce in voci:
         episodio = mappa.get(str(voce["episodio"]))
-        link = anime_api.link_mp4(episodio) if episodio else None
+        try:
+            link = anime_api.link_mp4(episodio) if episodio else None
+        except Exception:
+            # Un server può sollevare durante `episodio.links`: conta come fallito
+            # invece di far esplodere l'intera rigenerazione.
+            link = None
         if link:
             crea_file_anime(titolo, voce["stagione"], voce["episodio"], link)
             ok += 1
         else:
             falliti += 1
+
+    # Salva l'origine ritrovata (se mancava) perché le prossime rigenerazioni
+    # non dipendano più dalla ricerca per titolo.
+    if ok and link_anime:
+        for voce in voci:
+            try:
+                salva_origine_stagione_anime(
+                    titolo, voce["stagione"], anime_api.link_pagina_anime(link_anime)
+                )
+                break
+            except Exception:
+                pass
     return ok, falliti, "rigenerato"
