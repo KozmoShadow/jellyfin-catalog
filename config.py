@@ -14,3 +14,7 @@ except ImportError:
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
 JELLYFIN_URL = os.getenv("JELLYFIN_URL", "http://localhost:8096")
 JELLYFIN_API_KEY = os.getenv("JELLYFIN_API_KEY", "")
+
+# Cartelle di destinazione del catalogo (relative al progetto se non specificate).
+SERIES_PATH = os.getenv("SERIES_PATH", "Serie")
+FILMS_PATH = os.getenv("FILMS_PATH", "Film")
