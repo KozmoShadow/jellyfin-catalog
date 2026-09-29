@@ -1,108 +1,135 @@
 import requests
+import streamlit as st
 
 from config import TMDB_API_KEY
 
 API_KEY = TMDB_API_KEY
 BASE_URL = "https://api.themoviedb.org/3"
 
+# Timeout di ogni richiesta HTTP: senza, una rete lenta blocca l'app a tempo indefinito.
+TIMEOUT = 10
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def cerca_serie(titolo):
     """Cerca una serie TV per nome e restituisce i risultati principali."""
     url = f"{BASE_URL}/search/multi?api_key={API_KEY}&query={titolo}&language=it-IT"
-    response = requests.get(url)
-    
+    response = requests.get(url, timeout=TIMEOUT)
+
     if response.status_code == 200:
         return response.json().get("results", [])
     return []
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_dettagli_stagione(tmdb_id, numero_stagione):
     """Ottiene la lista degli episodi e i dettagli di una specifica stagione."""
     url = f"{BASE_URL}/tv/{tmdb_id}/season/{numero_stagione}?api_key={API_KEY}&language=it-IT"
-    response = requests.get(url)
-    
+    response = requests.get(url, timeout=TIMEOUT)
+
     if response.status_code == 200:
         return response.json()
     return None
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_numero_stagioni(tmdb_id):
     """Restituisce il numero totale di stagioni di una serie TV."""
     url = f"{BASE_URL}/tv/{tmdb_id}?api_key={API_KEY}&language=it-IT"
-    response = requests.get(url)
-    
+    response = requests.get(url, timeout=TIMEOUT)
+
     if response.status_code == 200:
         return response.json().get("number_of_seasons")
     return None
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_stagioni(tmdb_id):
     """Restituisce la lista delle stagioni di una serie, escludendo gli speciali (stagione 0)."""
     url = f"{BASE_URL}/tv/{tmdb_id}?api_key={API_KEY}&language=it-IT"
-    response = requests.get(url)
+    response = requests.get(url, timeout=TIMEOUT)
     if response.status_code == 200:
         stagioni = response.json().get("seasons", [])
         return [s for s in stagioni if s.get("season_number", 0) > 0]
     return []
 
+
 IMG_BASE_URL = "https://image.tmdb.org/t/p/w500"
 
+
+@st.cache_data(ttl=300, show_spinner=False)
 def cerca_multimediale(query, page=1):
     """Cerca film, serie TV o persone su TMDB supportando la paginazione."""
     if not query:
         return []
     url = f"https://api.themoviedb.org/3/search/multi?api_key={API_KEY}&language=it-IT&query={query}&page={page}"
-    res = requests.get(url)
+    res = requests.get(url, timeout=TIMEOUT)
     if res.status_code == 200:
         data = res.json()
         return data.get("results", []), data.get("total_pages", 1)
     return [], 1
 
+
+@st.cache_data(ttl=600, show_spinner=False)
 def get_tmdb_popular(media_type):
     """Recupera i contenuti popolari (movie o tv) da TMDB combinando le pagine."""
     results = []
-    
+
     # TMDB dà 20 risultati per pagina, quindi prendiamo la pagina 1 e la pagina 2
     for page in [1, 2]:
         url = f"https://api.themoviedb.org/3/{media_type}/popular?api_key={API_KEY}&language=it-IT&page={page}"
-        res = requests.get(url)
-        
+        res = requests.get(url, timeout=TIMEOUT)
+
         if res.status_code == 200:
             results.extend(res.json().get("results", []))
-            
+
     return results[:36]
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_tmdb_details(media_type, media_id):
     """Recupera i dettagli completi di un film o serie TV tramite ID."""
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}?api_key={API_KEY}&language=it-IT"
-    res = requests.get(url)
+    res = requests.get(url, timeout=TIMEOUT)
     if res.status_code == 200:
         return res.json()
     return None
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_tmdb_videos(media_type, media_id):
     """Recupera i video (trailer, teaser...) di un film o serie TV."""
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}/videos"
     params = {"api_key": API_KEY, "language": "it-IT"} # o en-US come fallback
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=TIMEOUT)
     if response.status_code == 200:
         return response.json().get("results", [])
     return []
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_tmdb_credits(media_type, media_id):
     """Recupera i crediti (cast e crew) di un film o serie TV."""
     url = f"{BASE_URL}/{media_type}/{media_id}/credits"
     params = {"api_key": API_KEY, "language": "it-IT"}
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=TIMEOUT)
     if response.status_code == 200:
         return response.json()
     return None
 
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_generi(media_type="movie"):
     """Restituisce la lista dei generi TMDB per 'movie' o 'tv' come lista di dizionari."""
     url = f"{BASE_URL}/genre/{media_type}/list"
     params = {"api_key": API_KEY, "language": "it-IT"}
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=TIMEOUT)
     if response.status_code == 200:
         return response.json().get("genres", [])
     return []
 
+
+@st.cache_data(ttl=600, show_spinner=False)
 def discover(media_type="movie", genere_id=None, anno=None, voto_min=None,
              min_voti=None, sort_by="popularity.desc", page=1):
     """
@@ -141,7 +168,7 @@ def discover(media_type="movie", genere_id=None, anno=None, voto_min=None,
     if min_voti:
         params["vote_count.gte"] = min_voti
 
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=TIMEOUT)
     if response.status_code == 200:
         data = response.json()
         return data.get("results", []), data.get("total_pages", 1)

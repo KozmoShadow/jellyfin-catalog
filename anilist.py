@@ -6,8 +6,12 @@ ospita video.
 """
 
 import requests
+import streamlit as st
 
 API_URL = "https://graphql.anilist.co"
+
+# Timeout della richiesta GraphQL: evita che l'app resti appesa se l'API è lenta.
+TIMEOUT = 20
 
 _MEDIA_FIELDS = """
     id
@@ -111,7 +115,7 @@ def _esegui(query, variabili=None):
         risposta = requests.post(
             API_URL,
             json={"query": query, "variables": variabili or {}},
-            timeout=20,
+            timeout=TIMEOUT,
         )
         if risposta.status_code == 200:
             return risposta.json().get("data")
@@ -120,11 +124,13 @@ def _esegui(query, variabili=None):
     return None
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_generi():
     """Restituisce i generi anime disponibili su AniList (lista di stringhe)."""
     return list(GENERI.values())
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_tag():
     """Restituisce i tag AniList utilizzabili come filtro (lista ordinata di nomi).
 
@@ -191,6 +197,7 @@ def _discover_query(filtri):
     return query, variabili
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def discover(genere=None, anno=None, voto_min=None, sort_by="TRENDING_DESC",
              page=1, per_page=30, generi=None, generi_esclusi=None, formati=None,
              stagione=None, stato=None, sorgente=None, paese=None, tag=None,
@@ -239,6 +246,7 @@ def discover(genere=None, anno=None, voto_min=None, sort_by="TRENDING_DESC",
     return pagina.get("media", []), pagina.get("pageInfo", {}).get("lastPage", 1)
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def cerca(titolo, page=1, per_page=30):
     """Cerca anime per titolo. Restituisce una tupla (risultati, ultima_pagina)."""
     if not titolo:
