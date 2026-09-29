@@ -154,11 +154,41 @@ def link_mp4(episodio):
     """
     if episodio is None:
         return None
-    for server in episodio.links:
+    try:
+        servers = list(episodio.links)
+    except Exception:
+        # Un server può sollevare durante la risoluzione: si prova comunque a
+        # leggerne gli altri, ma se fallisce tutto l'episodio resta senza link.
+        return None
+    for server in servers:
         link = getattr(server, "link", None)
         if _e_url_video(link):
             return link
     return None
+
+
+def motivo_link_mancante(episodio):
+    """Spiega in una frase perché un episodio non ha prodotto un link video.
+
+    Serve alla diagnostica della UI quando l'aggiunta fallisce senza un errore:
+    distingue "nessun server", "pagina web invece del file" e "URL senza estensione".
+    """
+    if episodio is None:
+        return "episodio assente nella lista AnimeWorld (numerazione diversa?)"
+    try:
+        servers = list(episodio.links)
+    except Exception as e:
+        return f"lettura server fallita ({type(e).__name__}: {e})"
+    if not servers:
+        return "AnimeWorld non ha restituito alcun server per l'episodio"
+    url = getattr(servers[0], "link", None)
+    if not url:
+        return "il server non ha restituito un URL"
+    if "animeworld.ac" in url:
+        return "il server ha restituito una pagina web invece del file"
+    if not _RE_VIDEO.search(url):
+        return f"URL senza estensione video: {url[:80]}"
+    return "nessun mirror valido"
 
 
 def lista_episodi(link):

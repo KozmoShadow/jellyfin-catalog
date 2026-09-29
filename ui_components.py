@@ -793,12 +793,15 @@ def _aggiungi_stagione_anime(titolo, stagione_num, numeri_episodi, mappa_episodi
 
         barra.progress(i / totale, text=f"Episodio {episodio_num} ({i}/{totale})...")
         try:
-            link = anime_api.link_mp4(mappa_episodi.get(episodio_num))
+            episodio = mappa_episodi.get(episodio_num)
+            link = anime_api.link_mp4(episodio)
             if link:
                 crea_file_anime(titolo, stagione_num, episodio_num, link)
                 aggiunti += 1
             else:
                 falliti += 1
+                if ultimo_errore is None:
+                    ultimo_errore = anime_api.motivo_link_mancante(episodio)
         except Exception as e:
             ultimo_errore = f"{type(e).__name__}: {e}"
             falliti += 1
