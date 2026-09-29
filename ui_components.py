@@ -17,11 +17,10 @@ from file_manager import (
 from estrattore import estrai_flussi
 
 
-def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details", key=None):
+def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"):
     """Renderizza una griglia di card cliccabili (poster + titolo + anno + tipo).
 
     link_path è la rotta a cui puntano le card (es. "/Film" per la pagina film).
-    key è una chiave univoca del componente HTML (evita collisioni tra griglie).
     """
     st.subheader(titolo_sezione)
 
@@ -127,7 +126,7 @@ def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"
     </div>
     """
 
-    components.html(html_code, height=altezza_box, scrolling=True, key=key)
+    components.html(html_code, height=altezza_box, scrolling=True)
 
 
 def render_scheda_dettagli(content_type, content_id):
@@ -270,13 +269,15 @@ def _gestione_serie(content_id, titolo):
     nome_stagione = st.selectbox("Stagione", list(opzioni_stagioni.keys()))
     stagione_num = opzioni_stagioni[nome_stagione]
 
-    episodi = tmdb.get_dettagli_stagione(content_id, stagione_num) or []
+    dettagli_stagione = tmdb.get_dettagli_stagione(content_id, stagione_num) or {}
+    # get_dettagli_stagione restituisce l'intero oggetto stagione: gli episodi sono in "episodes"
+    episodi = dettagli_stagione.get("episodes", [])
     if not episodi:
         st.info("Nessun episodio disponibile per questa stagione.")
         return
 
     opzioni_episodi = {
-        f"{int(e.get('episode_number', 0)):02d} - {e.get('name') or 'Senza titolo'}": e.get("episode_number")
+        f"{int(e.get('episode_number') or 0):02d} - {e.get('name') or 'Senza titolo'}": (e.get("episode_number") or 0)
         for e in episodi
     }
     etichette = list(opzioni_episodi.keys())

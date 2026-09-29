@@ -153,7 +153,6 @@ if query_ricerca:
             f"Risultati della ricerca per: '{query_ricerca}' (Pagina {st.session_state.search_page} di {total_pages})",
             results,
             link_path="/",
-            key="griglia_ricerca",
         )
 
         if total_pages > 1:

@@ -108,7 +108,6 @@ mostra_griglia(
     f"Risultati{suffisso} (Pagina {st.session_state.serie_page} di {total_pages})",
     risultati,
     link_path="/Serie TV",
-    key="griglia_serie",
 )
 
 if total_pages > 1:
