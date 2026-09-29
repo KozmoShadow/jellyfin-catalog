@@ -41,7 +41,12 @@ dashboard Streamlit.
    TMDB_API_KEY=...
    JELLYFIN_URL=http://localhost:8096
    JELLYFIN_API_KEY=...
+   SERIES_PATH=C:/percorso/verso/Serie
+   FILMS_PATH=C:/percorso/verso/Film
    ```
+
+   `SERIES_PATH` e `FILMS_PATH` sono opzionali: se li ometti, il catalogo viene
+   salvato nelle cartelle `Serie` e `Film` dentro il progetto.
 
 3. Avvia la dashboard dalla cartella `dashboard/`:
 
@@ -52,9 +57,10 @@ dashboard Streamlit.
 ## Note
 
 - Il file `.env` non è versionato: non committare mai le chiavi API.
-- I file `.m3u8` / `.strm` vengono scritti nelle cartelle definite in `paths.py`.
+- I file `.m3u8` / `.strm` vengono scritti nelle cartelle definite da `SERIES_PATH`
+  e `FILMS_PATH` nel `.env` (in `paths.py` ci sono solo i valori di default).
 - Le pagine **Film** e **Serie TV** usano l'endpoint `/discover` di TMDB con
   filtri per genere, anno, voto e ordinamento.
 - La gestione Jellyfin è per contenuto: un film è un singolo file, mentre per le
-  serie si aggiungono/rimuovono i **singoli episodi** (`S01E01`) nella cartella
-  `Stagione N`.
+  serie si aggiungono/rimuovono **intere stagioni** (`Stagione N`), con i singoli
+  episodi (`S01E01`) disponibili come opzione.
