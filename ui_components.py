@@ -1,5 +1,6 @@
 """Componenti UI condivisi tra le pagine Streamlit (griglia risultati + scheda dettagli)."""
 
+import html
 import urllib.parse
 
 import streamlit as st
@@ -7,6 +8,7 @@ import streamlit.components.v1 as components
 
 import tmdb
 import anime_api
+import anilist
 import paths
 from file_manager import (
     verifica_presenza_jellyfin,
@@ -143,49 +145,106 @@ def mostra_griglia(titolo_sezione, items, link_path="/", target="vixsrc_details"
     components.html(html_code, height=altezza_box, scrolling=True)
 
 
-def mostra_griglia_anime(items):
-    """Renderizza la griglia dei risultati AnimeWorld (card cliccabili per il dettaglio).
+_ANIME_GRID_STYLE = """
+    body { background-color: transparent; color: white; font-family: sans-serif; margin: 0; }
+    .grid-container { display: flex; flex-wrap: wrap; gap: 18px; justify-content: flex-start; }
+    .grid-item { flex: 0 0 180px; width: 180px; }
+    .grid-item a { text-decoration: none; color: inherit; display: block; }
+    .grid-item img {
+        width: 180px; height: 270px; object-fit: cover; border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.2s;
+    }
+    .grid-item img:hover { transform: scale(1.03); }
+    .grid-title {
+        font-size: 13px; font-weight: 600; margin-top: 6px; line-height: 1.25;
+        overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .grid-meta { font-size: 11px; color: #a0a0a0; margin-top: 2px; }
+    .grid-type {
+        font-size: 10px; color: #ff4b4b; text-transform: uppercase;
+        font-weight: bold; margin-top: 1px;
+    }
+    """
 
-    Ogni card apre la pagina /Anime passando il link AnimeWorld dell'anime.
+
+def _link_scheda_anime(titolo, link_aw, copertina):
+    """Costruisce l'href verso la scheda dettaglio della pagina /Anime."""
+    return (
+        f"/Anime?link={urllib.parse.quote(link_aw, safe='')}"
+        f"&titolo={urllib.parse.quote(titolo)}"
+        f"&copertina={urllib.parse.quote(copertina or '', safe='')}"
+    )
+
+
+def _card_anime(titolo, img_url, riga_meta, riga_tipo, href):
+    """Costruisce l'HTML di una singola card anime."""
+    titolo_sicuro = html.escape(titolo)
+    return f"""
+        <div class="grid-item">
+            <a href="{href}" target="vixsrc_details">
+                <img src="{html.escape(img_url, quote=True)}" alt="{titolo_sicuro}">
+                <div class="grid-title" title="{titolo_sicuro}">{titolo_sicuro}</div>
+                <div class="grid-meta">{riga_meta}</div>
+                <div class="grid-type">{riga_tipo}</div>
+            </a>
+        </div>
+        """
+
+
+def mostra_griglia_anime(items):
+    """Griglia dei risultati AnimeWorld (nome + anno + doppiaggio).
+
+    Le card hanno il titolo sotto la copertina, quindi non serve `components.html`
+    con altezza fissa: l'HTML viene inserito inline (`st.html`) e cresce da solo.
     """
     if not items:
         st.info("Nessun risultato trovato.")
         return
 
-    num_righe = (len(items) + 5) // 6
-    altezza_box = num_righe * 218
-
-    html_code = _GRID_STYLE
+    html_code = f"<style>{_ANIME_GRID_STYLE}</style><div class='grid-container'>"
 
     for item in items:
         titolo = item.get("name") or "Senza titolo"
-        link = item.get("link", "")
-        img_url = item.get("image") or "https://via.placeholder.com/140x210?text=No+Image"
-        year = item.get("year") or ""
-        tipo_str = "ITA" if item.get("dub") else "SUB ITA"
+        img_url = item.get("image") or "https://via.placeholder.com/180x270?text=No+Image"
+        pezzi = []
+        if item.get("year"):
+            pezzi.append(str(item["year"]))
+        pezzi.append("ITA" if item.get("dub") else "SUB ITA")
+        riga_meta = " &bull; ".join(pezzi)
+        href = _link_scheda_anime(titolo, item.get("link", ""), img_url)
+        html_code += _card_anime(titolo, img_url, riga_meta, "AnimeWorld", href)
 
-        href = (
-            f"/Anime?link={urllib.parse.quote(link, safe='')}"
-            f"&titolo={urllib.parse.quote(titolo)}"
-            f"&copertina={urllib.parse.quote(img_url, safe='')}"
-        )
+    html_code += "</div>"
+    st.html(html_code)
 
-        html_code += f"""
-        <div class="grid-item">
-            <a href="{href}" target="vixsrc_details">
-                <img src="{img_url}" alt="{titolo}">
-                <div class="grid-title" title="{titolo}">{titolo}</div>
-                <div class="grid-year">({year})</div>
-                <div class="grid-type">{tipo_str}</div>
-            </a>
-        </div>
-        """
 
-    html_code += """
-    </div>
+def mostra_griglia_scoperta_anime(items):
+    """Griglia dei risultati AniList: cliccando si cerca l'anime su AnimeWorld.
+
+    AniList non ospita video, quindi la card non apre direttamente la scheda:
+    porta alla ricerca su AnimeWorld col titolo tradotto.
     """
+    if not items:
+        st.info("Nessun risultato trovato.")
+        return
 
-    components.html(html_code, height=altezza_box, scrolling=True)
+    html_code = f"<style>{_ANIME_GRID_STYLE}</style><div class='grid-container'>"
+
+    for item in items:
+        titolo = anilist.titolo_italiano(item) or "Senza titolo"
+        img_url = (item.get("coverImage") or {}).get("large") \
+            or "https://via.placeholder.com/180x270?text=No+Image"
+        pezzi = [str(item["seasonYear"])] if item.get("seasonYear") else []
+        if item.get("averageScore"):
+            pezzi.append(f"⭐ {item['averageScore'] / 10:.1f}")
+        if item.get("episodes"):
+            pezzi.append(f"{item['episodes']} ep")
+        riga_meta = " &bull; ".join(pezzi)
+        href = f"/Anime?cerca={urllib.parse.quote(titolo)}"
+        html_code += _card_anime(titolo, img_url, riga_meta, "AniList", href)
+
+    html_code += "</div>"
+    st.html(html_code)
 
 
 def render_scheda_dettagli(content_type, content_id):

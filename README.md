@@ -63,8 +63,13 @@ dashboard Streamlit.
   `FILMS_PATH` e `ANIME_PATH` nel `.env` (in `paths.py` ci sono solo i default).
 - Le pagine **Film** e **Serie TV** usano l'endpoint `/discover` di TMDB con
   filtri per genere, anno, voto e ordinamento.
-- La pagina **Anime** usa la libreria `animeworld` (nessuna chiave API): la ricerca
-  avviene per titolo e i file `.strm` puntano agli URL `.mp4` diretti di AnimeWorld.
+- La pagina **Anime** ha due modalità: ricerca per titolo direttamente su AnimeWorld,
+  oppure esplorazione con **filtri** (genere, anno, voto, ordinamento) e sezione
+  **popolari**. Questi ultimi dati vengono da **AniList** (GraphQL, nessuna chiave
+  API), perché la libreria `animeworld` offre solo la ricerca.
+  I file `.strm` puntano agli URL `.mp4` diretti di AnimeWorld. Cliccando una card
+  AniList si cerca automaticamente l'anime su AnimeWorld, così il download resta
+  a un click di distanza.
   Ogni anime è una serie con una sola stagione (`Season 01`), salvo importare
   stagioni separate nella stessa cartella indicando il numero desiderato.
 - La gestione Jellyfin è per contenuto: un film è un singolo file, mentre per le
